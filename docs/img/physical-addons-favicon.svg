@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" fill="none">
+    <defs>
+        <style>
+            .physical-addons-logo{fill:#000}
+            @media (prefers-color-scheme: dark) {
+                .physical-addons-logo{fill:#fff}
+            }
+        </style>
+    </defs>
+<path class="physical-addons-logo" d="m266.669 400.001 133.333-66.666V216.668l-133.333 66.667v116.666ZM133.333 0 0 66.667V400l133.333-66.667v-66.666h133.334L400 200V0H133.333Zm0 100h133.334v66.667H133.333V100Z"/>
+</svg>
