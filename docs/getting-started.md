@@ -14,7 +14,7 @@ _Physical Atmosphere²_ (PA2) is a Blender add-on that puts a complete, realisti
 |                    | Atmosphere only | Clouds* |
 | ------------------ | --------------- | ------ |
 | **Specs**          | Any GPU (even integrated) that runs Blender 5.2 comfortably, laptops included. | Desktop-class GPU: RTX 3060 / RX 6600 or better. |
-| **What to expect** | **Runs almost anywhere.** Sky, sun, moon, planets and stars update in real time even on modest laptops. Drag the sun, scrub time, it keeps up. | **Working with clouds in the viewport will be slow.** Volumetric clouds are the heaviest part of the add-on, even for high-end GPUs at higher quality settings. Navigate on `Low` quality with `Temporal Accumulation` on: the image refines to full quality the moment the camera rests. Higher presets are for final frames, not for flying around. |
+| **What to expect** | **Runs almost anywhere.** Sky, sun, moon, planets and stars update in real time even on modest laptops. Drag the sun, scrub time, it keeps up. | **Working with clouds in the viewport will be slow.** Volumetric clouds are the heaviest part of the add-on, even for high-end GPUs at higher quality settings. Navigate on `Low` quality with `Temporal AA` on: the image refines to full quality the moment the camera rests. Higher presets are for final frames, not for flying around. |
 
 _\*We're currently working on cloud optimisation to make clouds faster in the viewport on lower performing devices._
 

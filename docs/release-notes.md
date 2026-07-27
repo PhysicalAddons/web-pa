@@ -1,3 +1,51 @@
+### 2.6.0 <small>- released 27.07.2026</small>
+
+The biggest release since the cloud system landed: a foveated sky pipeline that puts render-resolution detail where the camera looks, a ground-up rework of cloud light transport validated against Cycles path tracing, and the toolkit that made that validation possible.
+
+`new:`{: .label-new }
+
+- **Foveated Sky** — the sky is now rendered at full resolution where the camera is looking, while a lighter version keeps feeding lighting and reflections everywhere else. Sharper skies in the viewport and in renders, without paying the full cost for the parts you don't see. A new `Sky Resolution` setting (Full / Half / Quarter) controls how sharp that view is.
+- **Cloud lighting, validated** — every part of the cloud lighting was compared against Blender's Cycles path tracer, and the parts that disagreed were replaced with measured ones. Ambient light on clouds now comes from the actual rendered sky, so dawn golds and overcast blues finally match reality. Deep cloud interiors darken naturally while rims stay bright, giving real cumulus their bright-core, dark-outline character.
+- **More control over cloud shadows** — `Shadow`, `Indirect` and `Out-Scatter` depth are now independent sliders instead of one compromise value. The "Cloud Phase" section is now **Cloud Shading**, with the related controls grouped together.
+- **Ground-truth toolkit** — for the curious: render any lighting component alone (`Isolate Light`), view clouds without atmospheric haze (`Raw Clouds`), or bake the exact procedural clouds into an OpenVDB volume and render them side by side in Cycles.
+
+`improvements:`{: .label-improvements }
+
+- **Quality presets redefined** — all five rows (`Potato` to `NASA`) now set everything: resolution, steps, lighting quality, anti-aliasing and temporal features, in one click.
+- **Physical defaults** — out of the box the lighting is now physically correct with no boost multipliers. The defaults match the release hero scene.
+- **Rendering Settings reorganized** — a clearer Resolution section, sampling folded in, and the overall Quality preset always visible in the header.
+- **White balance presets named by scene** — "5600 K (Daylight)", "4000 K (Sunset)", "2000 K (Candlelight)" and friends.
+- Smooth motion everywhere: camera movement shows full-resolution content that refreshes continuously, and the image converges to clean anti-aliased quality the moment you stop.
+
+`fixed:`{: .label-fixed }
+
+- The final anti-aliased image now appears on its own in EEVEE, without needing a nudge in the UI.
+- Striping artifacts on cloud decks are gone.
+- Stutter while orbiting the camera is fixed.
+- Reflective materials no longer show a seam from the high-detail sky region.
+- The experimental "Blend Objects into Atmosphere" compositor toggle is temporarily disabled while it catches up with the new sky pipeline.
+
+
+### 2.5.3 <small>- released 24.07.2026</small>
+
+`new:`{: .label-new }
+
+- **Live Reflections** — reflections can now follow the moving clouds automatically (off by default, as each refresh costs a little), plus an `Update Reflections` button for one-shot refreshes.
+- **Cloud Time Scale** — one slider for the speed of all cloud motion. `0` freezes the sky completely, negative values run it backwards.
+
+`improvements:`{: .label-improvements }
+
+- Cloud rendering got roughly 20% faster in its heaviest stage.
+- The five separate Rolling toggles are now one switch: `Rolling Updates (reprojected)`.
+
+`fixed:`{: .label-fixed }
+
+- Animation renders no longer crash at high anti-aliasing settings.
+- Cloud shadows on your scene now animate during renders instead of freezing on the first frame.
+- Clouds no longer drift out of place in camera view and renders at wide aspect ratios.
+- Rolling updates no longer silently stop working until the file is reloaded.
+
+
 ### 2.5.2 <small>- released 22.07.2026</small>
 
 The first public release of Physical Atmosphere². 🎉

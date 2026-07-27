@@ -61,9 +61,10 @@ Adjusts how much light the sky contributes to the rest of your scene, in f-stops
 
 ### Blend Objects into Atmosphere
 
-When enabled, your 3D objects are blended into the atmosphere by the add-on's compositor: distant objects pick up the same haze and light as the sky around them, and tonemapping is handled by the add-on (pick a look with `Tonemap`). While enabled, Blender's Color Management has no effect.
+An experimental compositing mode where your 3D objects are blended into the atmosphere by the add-on: distant objects pick up the same haze and light as the sky around them, and tonemapping is handled by the add-on (pick a look with `Tonemap`). While enabled, Blender's Color Management has no effect.
 
-When disabled, the usual Blender `View Transform` and `Look` controls apply.
+!!! note
+    This toggle is temporarily disabled while the compositor catches up with the new sky pipeline introduced in 2.6.0. Scenes that already have it enabled can still switch it off. With it off, the usual Blender `View Transform` and `Look` controls apply.
 
 
 
@@ -132,14 +133,22 @@ The **Rain** layer works like the others, with two extras: `Rain Probability` (h
 ### Global cloud controls
 
 - **Anti-Tiling** — hides visible repetition across large cloud fields.
-- **Wind Flow** — a flow map that steers the clouds; the built-in one comes from real global wind data. `Wind Speed` sets how fast the weather drifts, `Wind Align Randomness` breaks up the uniformity.
+- **Wind Flow** — a flow map that steers the clouds. An empty slot means the built-in map from real global wind data is in use. `Wind Speed` sets how fast the weather drifts, `Wind Align Randomness` breaks up the uniformity.
 - **Detail 1/m** — the size of the fine cloud detail shared by all layers.
 - **Shape Speed / Detail Speed** — how fast the cloud shapes churn and evolve over time.
+- **Cloud Time Scale** — one multiplier for all cloud motion at once. `0` freezes the sky completely, negative values run it backwards.
 - **Turbulence** — large and fine turbulence that wrinkles the clouds (`Repeat` = pattern size, `Disp` = strength in meters).
 
-### Cloud Phase
+### Cloud Shading
 
-How the clouds respond to light: the bright silver lining toward the sun, the soft glow inside, the backscatter halo. The defaults are physically sensible; treat these as look-development controls when you want to art-direct how clouds catch the light.
+How the clouds respond to light: the bright silver lining toward the sun, the soft glow inside, the dark cores of heavy cumulus. The defaults are physically grounded and validated against path tracing, so treat these as look-development controls for when you want to art-direct the light:
+
+- **Mie LUT** — the physically measured way droplets scatter light, responsible for effects like the silver lining and cloud halos. `Strength` blends it in, `Depth Blur` softens it deeper into the cloud.
+- **Droplet Model** — how droplet size varies through the cloud, which subtly shifts those scattering effects.
+- **Direct / Indirect / Backscatter g** — how strongly light keeps its direction inside the cloud, split per lighting component.
+- **Shadow / Indirect / Out-Scatter Depth** — three independent depth controls: how deep sunlight, bounced light and the darkening reach into the cloud.
+- **MS Gain / Inner Glow / Out-Scatter** — the brightness of multiply-scattered light, the glow inside dense regions, and the strength of the darkening that gives cumulus their bright-rim, dark-core character.
+- **Ambient AO / Gradient / Ambient Prob** — how much the cloud's own mass, height and shape occlude the soft sky light falling on it.
 
 
 
@@ -147,7 +156,7 @@ How the clouds respond to light: the bright silver lining toward the sun, the so
 
 Real weather for your clouds. Using your scene's date and time, the add-on downloads the matching global cloud forecast (GFS weather data) and turns it into coverage maps.
 
-- **Output Folder** — where the generated maps are saved.
+- **Output location** — save the maps next to your .blend file (`Project`) or into a folder of your choice (`Custom Folder`).
 - **Generate Cloud Map** — downloads the forecast nearest to your scene's date/time and builds the maps (requires internet).
 - **Use as Cloud Coverage Maps** — plugs the generated maps into the cloud layers, so the sky above your chosen location matches the real weather for that moment.
 
@@ -194,27 +203,24 @@ The real night sky: stars appear in their correct positions for your location, d
 
 ## Rendering Settings
 
-Everything here trades quality against speed. The easiest way to use this section is the **Quality** preset dropdown: `Low` to `High` sets everything below in one go, per category (`Output`, `Lighting`, `Atmosphere`, `Clouds`). Change any individual value and the preset shows `Custom`.
+Everything here trades quality against speed. The easiest way is the **Quality** preset dropdown, always visible in the section header: `Potato` to `NASA` sets everything below in one go. Expanding the section reveals the per-category presets (`Resolution`, `Lighting`, `Atmosphere`, `Clouds`); change any individual value and the preset shows `Custom`.
 
-### Output
+Since 2.6.0 the sky renders through a foveated pipeline: full detail where the camera looks, a lighter version everywhere else for lighting and reflections. The controls below reflect that split.
 
-- **Sky Texture** — resolution of the sky image. Higher is sharper and slower to update.
-- **Probe Resolution** — resolution of the sky used for reflections on your objects.
-- **Probe Update** — how often those reflections refresh.
+### Resolution
+
+- **Sky Resolution** — how sharp the sky is where the camera looks: `Full`, `Half` or `Quarter` of the viewport (or render) resolution.
+- **Probe Resolution** — resolution of the sky texture that feeds lighting and reflections on your objects.
+- **Probe Update** — when those reflections refresh.
+- **Live Reflections** — automatically refresh reflections as the clouds move, at the chosen `Interval`. Off by default, since each refresh costs a probe re-render. The refresh button next to it updates reflections once, on demand.
+- **Temporal AA** — refines the image over a number of frames (the dropdown next to it) whenever the camera rests. Motion stays at full resolution and refreshes continuously; stopping converges to a clean anti-aliased image.
+- **Interleaved Sweep** — spreads cloud refinement across frames for smoother convergence.
+- **Sample Jitter** — adds a little per-frame noise that Temporal AA averages away, for faster convergence with clouds. It manages itself: on with clouds, off for the bare atmosphere.
 
 ### Atmosphere
 
 - **Steps** — how finely the air is sampled along each ray. More steps, smoother sky, slower updates.
 - **MS Steps** — same, for multiple scattering.
-
-### Sampling
-
-- **Sample Jitter** — offsets the samples a little every frame so accumulation can average away banding. Off gives a stable, noise-free frame on its own; on converges faster together with `Temporal Accumulation`.
-- **Temporal Accumulation** — refines the sky over a number of frames (the dropdown next to it) whenever the camera rests. This is what lets you navigate on fast settings and still end up with a clean image.
-- **Live Convergence** — shows the refinement happening live instead of all at once. May flicker.
-- **Rolling: Playback / Navigation / Sun** — during playback, camera movement or sun drags, updates a slice of the pixels each frame at full resolution instead of dropping to a blurry low-res draft.
-- **Reproject** — while navigating, warps the previous image to the new camera position so the picture stays sharp between updates. `+Clouds` extends the warping to the cloud bodies themselves.
-- **Interleaved Sweep** — spreads cloud refinement across frames for smoother convergence.
 - **3D Object Shadows** — your scene's objects cast shadows into the atmosphere and onto clouds (visible god-rays from a mountain, for example). Choose all objects or a specific collection.
 
 ### Clouds
@@ -227,7 +233,7 @@ Everything here trades quality against speed. The easiest way to use this sectio
 - **2D Far Clouds** — fades very distant clouds into a flat layer, for views from orbit.
 - **March Step Cap / Min & Max Step / Step Growth** — the ray-march budget: how finely the clouds are sampled with distance. Tighter values sharpen distant clouds and reduce banding at the cost of speed.
 - **Min Density / Min Transmit** — early-out thresholds; raising them speeds things up and can slightly thin the wispiest cloud edges.
-- **Godrays / Ambient AO / MS Sun Occlusion / Cloud Bounce** — individual light interactions between clouds and atmosphere: sun shafts through gaps, clouds darkening the sky light, clouds shading each other, and cloud light bouncing off the ground.
+- **Godrays / Ground Ambient AO / MS Sun Occlusion / Cloud Bounce** — individual light interactions between clouds and atmosphere: sun shafts through gaps, clouds darkening the sky light on the ground, clouds shading each other, and cloud light bouncing off the ground.
 
 
 
