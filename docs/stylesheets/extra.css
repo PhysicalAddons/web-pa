@@ -26,6 +26,9 @@ code.label-improvements {
 code.label-fixed {
     color: #8bc34b;
 }
+code.label-research {
+    color: #b57bff;
+}
 
 /* styles for documentation */
 .parameter {
