@@ -1,3 +1,30 @@
+### 2.6.1 <small>- released 28.07.2026</small>
+
+A stability release for two field crashes, plus the first wave of post-2.6.0 sky physics.
+
+`fixed:`{: .label-fixed }
+
+- **Linux**: a hard crash from the GPU safety check is fixed.
+- **macOS**: repeated display hiccups could eventually take down all of Blender. The add-on now stops its own sky pipeline first and asks for a restart, and Blender itself stays alive.
+- Switching Quality presets no longer risks a crash.
+- The setting sun is no longer cut off early above the horizon, and aerial cameras no longer show a sharp sky seam (both with refraction enabled).
+
+`new:`{: .label-new }
+
+- **Atmospheric Refraction** — physically modeled bending of light in the air: the horizon rises, distant terrain looms, and the sun flattens as it sets, all driven by your scene's air pressure and temperature. One checkbox on the Atmosphere tab turns the whole suite on. Off by default while it collects feedback.
+- **Cloud Shading models** — a `Model` dropdown in Cloud Shading with three looks: the new default **KSA** (a clean, production-proven reference look), the fully tweakable **Hybrid (PSA2)**, and **Octave MS**. The hybrid and all its knobs remain one click away.
+- **LUT Multiple Scattering (Hillaire)** — an alternative, film-industry-standard way of computing the sky's multiple scattering, available as a toggle on the Atmosphere tab.
+- **Baked Ground Shading** (experimental, Scientific layout) — a fully shaded planet surface with water glints, coastlines and night lights, folded straight into the sky.
+
+`improvements:`{: .label-improvements }
+
+- Fresh scenes now start at **Normal** quality (was Low), with Exposure (EV) at 5.0.
+- The cirrus and rain cloud layers start disabled in new scenes while they are being reworked.
+- The Rendering Settings section, with its Quality presets, now also appears in the Scientific layout.
+- Deep twilight looks better: the dark wedge fills with scattered light and the banding in the high sky is gone.
+- The bundled weather snapshot was refreshed.
+
+
 ### 2.6.0 <small>- released 27.07.2026</small>
 
 The biggest release since the cloud system landed: a foveated sky pipeline that puts render-resolution detail where the camera looks, a ground-up rework of cloud light transport validated against Cycles path tracing, and the toolkit that made that validation possible.

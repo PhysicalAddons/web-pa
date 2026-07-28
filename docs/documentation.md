@@ -74,7 +74,7 @@ The air itself. The checkbox in the header turns the whole atmosphere layer on o
 
 ### Multiple Scattering
 
-Light bouncing around in the air more than once. Keeps the sky and clouds from looking too dark, especially around sunset. `Multiple Scattering Multiplier` scales the effect.
+Light bouncing around in the air more than once. Keeps the sky and clouds from looking too dark, especially around sunset. `Multiple Scattering Multiplier` scales the effect, and `LUT Multiple Scattering (Hillaire)` switches to an alternative, film-industry-standard way of computing it. Feel free to A/B them.
 
 ### Sky Ambient
 
@@ -82,7 +82,7 @@ How much soft sky light falls onto clouds and the ground. Raise it for a brighte
 
 ### Atmospheric Refraction
 
-The air bends light near the horizon. This is what makes the sun look squashed as it sets, and lets you see it slightly after it has geometrically set. `Refraction Strength` scales the effect, and `Ground Temp Offset` mimics hot or cold ground (mirage-like conditions).
+The air bends light near the horizon. This is what makes the sun flatten and squash as it sets, lets you see it slightly after it has geometrically set, and makes distant terrain loom above the horizon. The whole effect is physically driven by your scene's air pressure and temperature. `Refraction Strength` scales it, and `Ground Temp Offset` mimics hot or cold ground (mirage-like conditions). Off by default; one checkbox turns the whole suite on.
 
 ### Rayleigh
 
@@ -143,11 +143,12 @@ The **Rain** layer works like the others, with two extras: `Rain Probability` (h
 
 How the clouds respond to light: the bright silver lining toward the sun, the soft glow inside, the dark cores of heavy cumulus. The defaults are physically grounded and validated against path tracing, so treat these as look-development controls for when you want to art-direct the light:
 
+- **Model** — the overall shading recipe. **KSA** (the default) is a clean, production-proven look; **Hybrid (PSA2)** is the fully tweakable model that responds to every knob below; **Octave MS** is a third, energy-conserving take. Try all three on your scene.
 - **Mie LUT** — the physically measured way droplets scatter light, responsible for effects like the silver lining and cloud halos. `Strength` blends it in, `Depth Blur` softens it deeper into the cloud.
 - **Droplet Model** — how droplet size varies through the cloud, which subtly shifts those scattering effects.
 - **Direct / Indirect / Backscatter g** — how strongly light keeps its direction inside the cloud, split per lighting component.
 - **Shadow / Indirect / Out-Scatter Depth** — three independent depth controls: how deep sunlight, bounced light and the darkening reach into the cloud.
-- **MS Gain / Inner Glow / Out-Scatter** — the brightness of multiply-scattered light, the glow inside dense regions, and the strength of the darkening that gives cumulus their bright-rim, dark-core character.
+- **MS Gain / Inner Glow / Out-Scatter / Interior Fill** — the brightness of multiply-scattered light, the glow inside dense regions, the darkening that gives cumulus their bright-rim, dark-core character, and a fill light for deep interiors.
 - **Ambient AO / Gradient / Ambient Prob** — how much the cloud's own mass, height and shape occlude the soft sky light falling on it.
 
 
