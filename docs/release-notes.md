@@ -1,3 +1,47 @@
+### 2.6.4 <small>- released 28.07.2026</small>
+
+macOS hotfix — the definitive fix for the "framebuffer stack depth 16" session-killer.
+
+`fixed:`{: .label-fixed }
+
+- **macOS**: sky updates no longer share GPU state with EEVEE's live sampling path. On Apple GPUs the sky now publishes through the same CPU path final renders have always used, so Blender's Metal image-texture machinery can no longer leak framebuffer slots and take down the session. Windows and Linux are unchanged.
+
+`improvements:`{: .label-improvements }
+
+- Practical trade-off on Apple GPUs only: sky updates cost tens of milliseconds instead of ~3 ms, and motion reprojection is disabled (the view re-marches instead) — a slightly less snappy sky in exchange for sessions that no longer die.
+
+
+### 2.6.3 <small>- released 28.07.2026</small>
+
+The responsiveness release: quality switches drop from seconds to a blip, the status bar narrates the heavy stages, and macOS sessions that used to die at "framebuffer stack depth 16" now diagnose themselves and keep Blender alive.
+
+`improvements:`{: .label-improvements }
+
+- **Quality switches are ~5x faster** (measured heavy-tick wall time ~2.9 s → 0.6 s, after the earlier shape-volume fix): the cloud light grid rebuilds in the background while the old grid keeps lighting the scene, and texture uploads skip a slow Python-list conversion on Windows.
+- **The status bar narrates heavy work** ("Compiling sky shader…", "Baking cloud light grid 12/32…") — and predictably heavy updates announce themselves one frame early, so the message is actually visible during the freeze instead of after it.
+- MS Multiplier defaults to 2.0 — the Hillaire multiple-scattering LUT reads better at 2x.
+
+`fixed:`{: .label-fixed }
+
+- **macOS**: sessions could still hit **"Maximum framebuffer stack depth 16"** through silent leaks the earlier counter never saw. Every framebuffer bind now verifies the GPU state it restores; a detected leak is logged with its exact source, and the sky stops safely at 8 lost slots — Blender survives. Please report those console lines if you see them.
+
+
+### 2.6.2 <small>- released 28.07.2026</small>
+
+Hotfix for a Windows crash in 2.6.1, plus the first responsiveness work and two cloud-shading refinements.
+
+`fixed:`{: .label-fixed }
+
+- **Windows: crash when switching Quality** (also possible on other platforms): the sky renderer could touch a live image texture while EEVEE was still rebuilding its world probe. The guard now waits for two completed viewport redraws instead of a time window.
+
+`improvements:`{: .label-improvements }
+
+- **Live status feedback**: heavy pipeline stages (shader compile, shape-volume bake, light grid, LUTs, full bakes) now announce themselves in the status bar and as a small text label riding the mouse cursor in the viewport.
+- **Cloud shape volume is disk-cached**: baked once per machine, then quality switches load it back in a fraction of a second (measured 12.3 s → 0.05 s). The cache invalidates itself when the noise shader changes.
+- **Quality presets only write what changed** — no more redundant shader/texture/probe rebuilds when a preset re-applies values that were already set.
+- **Ground bounce reworked** (was splotchy and missed the lit undersides): cloud bases receive fuller physical ground visibility — undersides get twice the previous bounce; tops are unchanged.
+
+
 ### 2.6.1 <small>- released 28.07.2026</small>
 
 A stability release for two field crashes, plus the first wave of post-2.6.0 sky physics.
