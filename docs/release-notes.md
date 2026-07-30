@@ -24,7 +24,7 @@ The ground release: the planet surface is now rendered entirely by the add-on's 
 - **The sky pauses while you model** — with all viewports in Solid or Wireframe shading, the whole sky machinery stands down and stops burning GPU, resuming the moment a rendered viewport comes back.
 - **Cloud light grid is ~3x cheaper** while flying and during sun drags.
 - **The temporal controls work again** — `Temporal Upscaling` and `Interleaved Sweep` now actually drive the visible sky, and the UI lists them in the order the machinery works.
-- **Fast camera flicks look better** — quick motion shows soft but current content instead of tearing or streak residue.
+- **Smarter temporal filtering (part A of the TAA arc)** — the sky's history is now sampled with a higher-quality filter on the crisp channels (cloud edges, ground shadows), and during fast camera motion stale pixels fade toward the fresh frame instead of being stretched. Fast flicks show soft but current content instead of tearing or streak residue; slow, gentle motion is untouched.
 - **The download is much smaller** — roughly 38 MB instead of 101 MB, thanks to a 20x smaller moon height map and no bundled earth textures.
 
 `fixed:`{: .label-fixed }
