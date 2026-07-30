@@ -1,3 +1,40 @@
+### 2.7.0 <small>- released 30.07.2026</small>
+
+The ground release: the planet surface is now rendered entirely by the add-on's own sky renderer, with physically correct brightness, and final renders match the viewport exactly. Plus proper Cycles viewport support and large performance gains.
+
+!!! warning "Your scenes will look different"
+    The ground now has physically correct brightness, which reads about **3x darker** than before. That is the true value; compensate with `Exposure` or brighter albedos rather than by scaling the light. Golden hour also changed: light bounced off clouds now reddens and dims with the sun instead of staying noon-white, so raise `Cloud Bounce` if you had tuned it against the old behavior.
+
+`new:`{: .label-new }
+
+- **Bring your own planet** — the ground now has plain `Day` / `Water` / `Night` / `Height` texture slots for any planet's maps, in all interface layouts. No textures ship with the add-on; with no Day map loaded, the flat `Albedo Color` is the ground. The old `Earth Texture` toggle is gone, since a loaded Day map is the switch.
+- **Ground Roughness and Ground Specular** — rough terrain stays fuller toward grazing light, and a specular sheen turns land into wet ground, ice sheets or salt flats. Both default to off.
+- **Hapke land shading** — a toggle switches the land to the research-grade model used for the Moon's regolith, with an opposition `Surge` control.
+- **Sunlit clouds light the ground** — the new `Cloud Bounce` knob in Ground/Earth: a broken cumulus field visibly brightens the land below, sun-tinted and self-shadowed correctly.
+- **Objects cast shadows on the ground** — scene geometry now shadows the planet surface with no setup, using the existing 3D Object Shadows machinery.
+- **Reflections block** — `Atmosphere Reflection` and the cloud silhouette `Mask` are now independent controls instead of hiding behind one toggle.
+- **Surface Grid** — an optional reference grid over the planet surface with a cell size in meters. A scale reference and a mapping check in one.
+
+`improvements:`{: .label-improvements }
+
+- **Renders match the viewport** — final renders now run the exact same GPU ground shading as the viewport: water glints, sky and cloud reflections, cloud bounce and Hapke all appear in F12.
+- **Proper Cycles viewport support** — Cycles now gets the same sharp foveated sky as EEVEE, converges to a crisp preview instead of getting stuck blurry or blocky, and no longer restarts its path tracing every second.
+- **Twilight cleaned up** — the smooth concentric arcs around a below-horizon sun are gone, and the twilight terminator in the sky's multiple scattering is softer and physically reddened.
+- **Much faster playback** — timeline playback runs up to 3x faster, and rotating the camera during playback no longer drops the frame rate.
+- **The sky pauses while you model** — with all viewports in Solid or Wireframe shading, the whole sky machinery stands down and stops burning GPU, resuming the moment a rendered viewport comes back.
+- **Cloud light grid is ~3x cheaper** while flying and during sun drags.
+- **The temporal controls work again** — `Temporal Upscaling` and `Interleaved Sweep` now actually drive the visible sky, and the UI lists them in the order the machinery works.
+- **Fast camera flicks look better** — quick motion shows soft but current content instead of tearing or streak residue.
+- **The download is much smaller** — roughly 38 MB instead of 101 MB, thanks to a 20x smaller moon height map and no bundled earth textures.
+
+`fixed:`{: .label-fixed }
+
+- A Cycles crash on Blender 5.2 during its background sky bake.
+- Cloud shadows no longer smear into long streaks when descending or orbiting.
+- The ground specular no longer fades away at high altitude.
+- The ground compose no longer corrupts pixels belonging to your 3D scene when compositing is involved.
+
+
 ### 2.6.4 <small>- released 28.07.2026</small>
 
 macOS hotfix — the definitive fix for the "framebuffer stack depth 16" session-killer.
