@@ -31,7 +31,6 @@ The ground release: the planet surface is now rendered entirely by the add-on's 
 
 - A Cycles crash on Blender 5.2 during its background sky bake.
 - Cloud shadows no longer smear into long streaks when descending or orbiting.
-- The ground specular no longer fades away at high altitude.
 - The ground compose no longer corrupts pixels belonging to your 3D scene when compositing is involved.
 
 
