@@ -1,3 +1,22 @@
+### 2.7.1 <small>- released 30.07.2026</small>
+
+A crash fix for renders, and a faster first cloud bake.
+
+`fixed:`{: .label-fixed }
+
+- **Renders no longer crash Blender.** Blender's own `Lock Interface` setting is what keeps a render from being disturbed while it runs, and the add-on was requesting it too late to take effect. It is now switched on and kept on whenever the atmosphere is enabled, including in older files. If a render somehow still starts unlocked, the add-on stands down for its duration and renders with the last baked sky rather than risking a crash, and says so in the console.
+- Two harmless but noisy TIFF warnings on every add-on load are gone.
+
+`improvements:`{: .label-improvements }
+
+- **The first cloud bake of a session is about 300 ms faster** — the cloud sampler's inputs are now either pre-baked into the add-on or cached on your machine after the first build. Worth knowing: the bigger wait on a first-ever cloud enable is Blender compiling the shaders (~12 s), which this does not change.
+
+`prototypes / research:`{: .label-research }
+
+- **Faster shader compilation was investigated and rejected.** Two passes were built to hand the graphics driver far less shader code (down to a quarter of the original size in places). A careful A/B measured no improvement at all: drivers discard unused code cheaply and spend their time optimizing what actually runs. The machinery was removed rather than shipped for no gain.
+- Known limitation surfaced by that work: the main cloud shader does not compile on Blender's OpenGL backend. This is long-standing rather than new, and only reachable if Blender falls back to OpenGL. Vulkan and Metal are unaffected.
+
+
 ### 2.7.0 <small>- released 30.07.2026</small>
 
 The ground release: the planet surface is now rendered entirely by the add-on's own sky renderer, with physically correct brightness, and final renders match the viewport exactly. Plus proper Cycles viewport support and large performance gains.
