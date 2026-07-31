@@ -188,11 +188,48 @@ The moon renders with its correct phase and its familiar face. In Earth mode its
 
 ## Ground / Earth
 
-The planet under your feet.
+The planet under your feet, rendered by the add-on itself. No textures ship with the add-on, so the image slots are yours to fill with any planet's maps: Earth, Mars, or something invented.
 
-- **Ground Albedo** — how bright the ground is. Brighter ground bounces more light back into the sky and onto cloud bases.
+!!! note "Physical brightness"
+    Since 2.7.0 the ground is normalized physically, which reads about 3x darker than it did before. That is the correct value; compensate with `Exposure` or brighter albedos rather than by scaling the light.
+
+- **Albedo Color** — the ground's albedo. It is the visible ground color when no `Day` map is loaded, and it always tints the light the ground bounces back into the sky and onto cloud bases.
 - **Bounce** — how much of that ground light is bounced back up.
-- **Earth Texture** — use the built-in satellite texture of Earth (visible from altitude), with a `Brightness` control. Turn it off to use a flat `Albedo Color` instead, handy for snow, desert, or stylized planets.
+
+### Planet maps
+
+Each slot is optional; leave it empty and the add-on falls back to a simpler form.
+
+- **Day** — the planet's surface color, seen from altitude. Loading one replaces the flat Albedo Color; `Brightness` scales it.
+- **Water** — a mask marking water, which gets its own reflective surface. No mask and no heightmap means no specular water.
+- **Night** — city lights and other night-side emission, faded in around dusk.
+- **Height** — terrain elevation. With one loaded you also get `Terrain (m)` and `Sea Level (m)` (water forms wherever the terrain falls below sea level, so no separate mask is needed), plus `Water Depth` and `Shore Softness` for coastal color, and `Bicubic Sampling` / `Height Normals` for smoother terrain shading.
+
+!!! tip
+    The `Water` and `Height` slots hold data, not color. The panel surfaces a `Color Space` dropdown next to them: keep those on `Non-Color` so the values aren't distorted.
+
+### Surface shading
+
+- **Ground Rough** — roughness of the land. `0` is a perfectly flat Lambertian surface; higher values keep rough terrain fuller toward grazing light.
+- **Spec** — a specular sheen on land, for wet ground, ice sheets or salt flats. `0` is off.
+- **Surge** — the opposition surge: the brightening you see when looking from exactly the sun's direction, as on the full moon.
+- **Hapke 1981** — switches the land to the research-grade reflectance model used for lunar regolith, rather than the cheaper default.
+- **Cloud Bounce** — sunlit clouds re-radiating light down onto the ground. A broken cumulus field visibly brightens the land below; a deck sitting in its own shadow does not. Appears when clouds are enabled.
+
+### Surface Grid
+
+An optional reference grid drawn over the planet, doubling as a scale reference and a mapping check. Choose the grid type, then set `Cell` size (degrees for the geographic graticule, meters for the others), `Ink` for line strength, and up to three levels of `Major` lines. `Overlay` draws it on top of the surface, and `Geo-Anchored` locks it to the planet rather than the view.
+
+### Water Medium
+
+- **Deep Color / Extinction** — the color of deep water and how quickly light is absorbed with depth.
+- **Water Rough** — roughness of the water surface, which spreads or tightens the sun and moon glints.
+- **Night** — strength of the night lights from the `Night` map.
+
+### Reflections
+
+- **Atmosphere Reflection** — the sky reflecting off the surface.
+- **Cloud Mask** — how strongly cloud silhouettes appear in those reflections. `0` turns cloud reflections off while leaving the atmosphere reflection intact.
 
 
 
@@ -214,8 +251,9 @@ Since 2.6.0 the sky renders through a foveated pipeline: full detail where the c
 - **Probe Resolution** — resolution of the sky texture that feeds lighting and reflections on your objects.
 - **Probe Update** — when those reflections refresh.
 - **Live Reflections** — automatically refresh reflections as the clouds move, at the chosen `Interval`. Off by default, since each refresh costs a probe re-render. The refresh button next to it updates reflections once, on demand.
-- **Temporal AA** — refines the image over a number of frames (the dropdown next to it) whenever the camera rests. Motion stays at full resolution and refreshes continuously; stopping converges to a clean anti-aliased image.
-- **Interleaved Sweep** — spreads cloud refinement across frames for smoother convergence.
+- **Temporal Upscaling** — the master switch for smooth motion. On, the sky reuses and re-registers the previous frame as you move, so motion stays sharp; off, it simply re-renders the whole view at a slower cadence.
+- **Interleaved Sweep** — a sub-option of the upscaler (indented beneath it): how the refresh is spread across frames. `4x4` is the smoothest and cheapest, `2x2` refreshes faster, `Off` re-renders the whole view on every update.
+- **Temporal AA** — refines the image over a number of samples (the dropdown next to it) whenever the camera rests, converging to a clean anti-aliased image. The sample count also sets the anti-aliasing of final renders, so it stays active even with the toggle off.
 - **Sample Jitter** — adds a little per-frame noise that Temporal AA averages away, for faster convergence with clouds. It manages itself: on with clouds, off for the bare atmosphere.
 
 ### Atmosphere
