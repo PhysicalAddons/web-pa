@@ -1,6 +1,6 @@
 ### 2.7.4 <small>- released 31.07.2026</small>
 
-A hotfix consolidating several rounds of macOS fixes, plus two important time-zone corrections. It replaces 2.7.3.
+A hotfix continuing the macOS work from 2.7.3, plus two important time-zone corrections.
 
 `fixed:`{: .label-fixed }
 
