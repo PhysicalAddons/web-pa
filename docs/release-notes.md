@@ -1,3 +1,28 @@
+### 2.7.2 <small>- released 31.07.2026</small>
+
+The macOS release: Apple GPUs finally get the same fast, full-featured sky as Windows and Linux. Plus much better object shadows for everyone.
+
+`new:`{: .label-new }
+
+- **macOS is no longer the slow path.** The sky now publishes straight on the GPU instead of copying every frame back through the CPU: about 0.3 ms per update instead of ~67 ms, and the GPU works in the background instead of blocking Blender.
+- **The smooth-motion machinery runs on Mac for the first time** — reprojection, rolling updates and temporal AA were Windows-only until now.
+- **3D Object Shadows work on macOS.** Previously every Mac session reported them as unavailable; they now work on every platform, with no special cases left.
+- **The long-standing Mac session-killer is gone** — the framebuffer leak that could take down Blender after seconds of orbiting no longer exists on the new path (verified across 1500 orbit ticks and 1800 sky updates with zero leaks).
+
+`improvements:`{: .label-improvements }
+
+- **Object shadows have proper soft edges.** Penumbras now spread both inward and outward from the shadow edge, the way real ones do, and the banded "nested outlines" in long low-sun shadows are gone.
+- **Shadow softness follows your sun's size** — scaling the sun with the Body Scale sliders now correctly blurs its shadows instead of keeping a razor edge.
+- Object shadows are no longer one frame behind the camera.
+- The sky no longer trails the geometry while panning.
+- Faster, lighter sky updates on high-DPI (Retina) displays.
+
+`fixed:`{: .label-fixed }
+
+- **The sky now shows in the Cycles viewport again**, and it anti-aliases there properly instead of showing an aliased sun disc and horizon.
+- Blender starts with no shader warnings in the console.
+
+
 ### 2.7.1 <small>- released 30.07.2026</small>
 
 A crash fix for renders, and a faster first cloud bake.
