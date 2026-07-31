@@ -1,3 +1,14 @@
+### 2.7.3 <small>- released 31.07.2026</small>
+
+A hotfix for three crash and stability issues reported on macOS after 2.7.2.
+
+`fixed:`{: .label-fixed }
+
+- **Quitting Blender while the sky was updating could crash.** The add-on wrote to the status bar as Blender was already tearing its windows down. It no longer touches the interface once shutdown has begun.
+- **A GPU stability hazard is closed.** The object-shadow and scene-depth passes prepared their geometry at the wrong moment, which on Apple GPUs could leak resources and eventually wedge the session. They now prepare everything up front and only draw.
+- **The safety limit is stricter.** If GPU resources do start leaking, the add-on now stops its sky pipeline earlier and leaves Blender more headroom to keep working. On a machine that is already in trouble the sky freezes sooner, which is far better than losing unsaved work.
+
+
 ### 2.7.2 <small>- released 31.07.2026</small>
 
 The macOS release: Apple GPUs finally get the same fast, full-featured sky as Windows and Linux. Plus much better object shadows for everyone.
