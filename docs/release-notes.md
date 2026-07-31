@@ -1,3 +1,18 @@
+### 2.7.4 <small>- released 31.07.2026</small>
+
+A hotfix consolidating several rounds of macOS fixes, plus two important time-zone corrections. It replaces 2.7.3.
+
+`fixed:`{: .label-fixed }
+
+- **The UTC field took your offset backwards.** It wanted the sign flipped, so entering the number every other tool uses (New York `-5`, Berlin `+1`, Tokyo `+9`) put the sky hours out. The field is now **UTC Offset**, stated the normal way. Existing scenes keep the times they were saved with, and `Set Current Time` was never affected.
+- **Daylight Savings now moves the displayed time too.** The sun shifted by an hour but the panel readout did not, so one of the two always looked wrong. Both now agree, and the label reads `UTC-4.0 · DST` instead of the ambiguous `+1h DST adj.`.
+- **macOS: the viewport no longer freezes after rendering**, and the sky pipeline no longer stops after sitting idle or after switching to Cycles. All the remaining GPU resource leaks behind those symptoms are gone, verified across eight stress scenarios (EEVEE orbit, clouds with object shadows and a moving sun, render-then-idle, idle both ways, and Cycles on CPU and GPU) with zero leaks.
+- **macOS: Cycles no longer pays for work it has no stake in**, which had quietly re-armed the same class of leak.
+- Quitting Blender while the sky was updating could crash; it no longer touches the interface once shutdown has begun.
+- A GPU stability hazard in the object-shadow and scene-depth passes is closed: they now prepare their geometry up front and only draw.
+- The safety limit is stricter. If resources do start leaking, the add-on stops its sky pipeline earlier and leaves Blender more headroom, so the sky freezes sooner rather than risking unsaved work.
+
+
 ### 2.7.3 <small>- released 31.07.2026</small>
 
 A hotfix for three crash and stability issues reported on macOS after 2.7.2.
