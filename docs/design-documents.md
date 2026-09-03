@@ -1586,7 +1586,6 @@ The rect march already contains the separation seam. pa2ColumnComposite
 (sky_driver.glsl:50) computes the HQ cloud march and composes it as
 
     SCATTER = L_cloud * T_cam_to_cloud
-
             + sunIrr * (Sca_front * alpha + Sca * (1 - alpha))
 
 i.e. cloud radiance and camera->cloud transmittance are ALGEBRAICALLY separable
@@ -1968,7 +1967,6 @@ march - slower, still correct. The actual remaining distance:
      unify the fallbacks on the weather-map column if it shows.
  (4) Delete the machinery: the bake driver + host regen/anchor/cache,
      the 7th channel (uCloudLightGrid) in every builder, 3 props + UI
-
      + presets, 20 GLSL gate sites collapsing to their #else content.
      Same shape as the lighting-sky removal.
 No open design questions - (2)+(3) are one session, (4) the big

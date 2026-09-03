@@ -169,7 +169,7 @@ def escape_block(lines):
     return text.split("\n")
 
 
-LIST_ITEM = re.compile(r"^\s*(?:[-*+]|\d+\.)\s+")
+LIST_ITEM = re.compile(r"^\s*(?:[-*]|\d+\.)\s+")  # the docs never use "+" bullets
 TWO_SPACE = re.compile(r"^  \S")
 GAP = re.compile(r"\S {2,}\S")
 
