@@ -1,0 +1,28 @@
+<figure class="pa2-fig pa2-fig--flat">
+<svg viewBox="0 0 720 340" role="img" aria-label="A camera above a curved planet. A dashed straight ray reaches the geometric horizon; a solid bent ray curves down and touches the surface further away; a dotted line shows the apparent direction, higher than both.">
+  <defs>
+    <clipPath id="rf-above"><rect x="0" y="0" width="720" height="340"/></clipPath>
+  </defs>
+  <circle cx="360" cy="1180" r="960" class="rf-sky-a" clip-path="url(#rf-above)"/>
+  <circle cx="360" cy="1180" r="930" class="rf-sky-b" opacity="0.55" clip-path="url(#rf-above)"/>
+  <circle cx="360" cy="1180" r="900" class="rf-ground" clip-path="url(#rf-above)"/>
+  <line x1="360" y1="262" x2="537" y2="298" class="rf-straight" stroke-width="1.6" stroke-dasharray="6 5" fill="none"/>
+  <line x1="537" y1="298" x2="700" y2="331" class="rf-straight" stroke-width="1" stroke-dasharray="2 5" fill="none" opacity="0.7"/>
+  <path d="M 360 262 Q 487 276 630 321" class="rf-bent" stroke-width="2.4" fill="none"/>
+  <path d="M 630 321 Q 690 340 720 351" class="rf-bent" stroke-width="1" stroke-dasharray="2 5" fill="none" opacity="0.6"/>
+  <line x1="360" y1="262" x2="720" y2="301.7" class="rf-apparent" stroke-width="1.4" stroke-dasharray="1.5 4" fill="none"/>
+  <circle cx="684" cy="297.5" r="9" class="rf-sun"/>
+  <circle cx="360" cy="262" r="4.5" class="rf-ink"/>
+  <line x1="360" y1="266" x2="360" y2="280" class="rf-ink-stroke" stroke-width="1.4"/>
+  <circle cx="537" cy="298" r="3" class="rf-mut"/>
+  <circle cx="630" cy="321" r="3" class="rf-bent-fill"/>
+  <g class="rf-label">
+    <text x="366" y="250">eye · h = 2 m</text>
+    <text x="470" y="245" class="rf-mut">straight ray · geometric horizon at 5.05 km</text>
+    <text x="500" y="318" text-anchor="end" class="rf-bent-fill">bent ray · lifted horizon at √(2Rh/(1−k)) = 5.54 km</text>
+    <text x="600" y="282" text-anchor="end" class="rf-apparent-fill">apparent direction · +34′ at sea level</text>
+    <text x="80" y="330" class="rf-mut">k = −R · G(h),  G = (1/n)·dn/dh,  standard air k = 0.17</text>
+  </g>
+</svg>
+<figcaption>The ground viewer's horizon ray. Refraction is exaggerated for the drawing; the real bend is 34′ at the horizon and the lifted horizon is 10 % further. Everything the design does follows from walking that curve step by step and asking, at every consumer, "where am I and which way am I looking".</figcaption>
+</figure>

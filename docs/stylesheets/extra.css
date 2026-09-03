@@ -89,3 +89,74 @@ html {
     scroll-behavior: smooth;
 }
 
+
+
+/* design documents page */
+code.label-deferred {
+    color: #9e9e9e;
+}
+.pa2-fig {
+    margin: 24px 0;
+    padding: 16px 12px 8px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background: #ffffff;
+    overflow-x: auto;
+}
+.pa2-fig svg {
+    display: block;
+    margin: 0 auto;
+    height: auto;
+}
+.pa2-fig figcaption {
+    font-size: 14px;
+    color: #666666;
+    margin-top: 8px;
+    padding: 0 4px;
+}
+.pa2-fig .bx { fill: #f5f5f5; stroke: #d0d0d0; stroke-width: 1; }
+.pa2-fig .bx2 { fill: #ffffff; stroke: #d0d0d0; stroke-width: 1; }
+.pa2-fig .nf { fill: none; }
+.pa2-fig .st-sky { stroke: #02a6f2; stroke-width: 1.4; }
+.pa2-fig .st-sun { stroke: #ff6e42; stroke-width: 1.4; }
+.pa2-fig .st-lut { stroke: #8bc34b; stroke-width: 1.2; }
+.pa2-fig .st-cloud { stroke: #9e9e9e; stroke-width: 1.2; }
+.pa2-fig .st-vio { stroke: #b57bff; stroke-width: 1.4; }
+.pa2-fig .t1 { font: 600 11px var(--md-code-font-family, monospace); fill: #000000; }
+.pa2-fig .t2 { font: 400 10.5px Inter, -apple-system, Helvetica, Arial, sans-serif; fill: #666666; }
+.pa2-fig .t3 { font: 500 10px var(--md-code-font-family, monospace); fill: #000000; }
+.pa2-fig .th { font: 600 10px Inter, -apple-system, Helvetica, Arial, sans-serif; letter-spacing: .14em; fill: #666666; }
+.pa2-fig .arw { stroke: #666666; stroke-width: 1.2; fill: none; }
+.pa2-fig .arw-sky { stroke: #02a6f2; stroke-width: 1.3; fill: none; }
+.pa2-fig .arw-sun { stroke: #ff6e42; stroke-width: 1.3; fill: none; }
+.pa2-fig .arw-lut { stroke: #8bc34b; stroke-width: 1.3; fill: none; }
+.pa2-fig .arw-vio { stroke: #b57bff; stroke-width: 1.3; fill: none; }
+.pa2-fig .arw-cloud { stroke: #9e9e9e; stroke-width: 1.3; fill: none; }
+.pa2-fig .dash { stroke-dasharray: 5 4; }
+.pa2-fig .mk-mut { fill: #666666; }
+.pa2-fig .mk-sky { fill: #02a6f2; }
+.pa2-fig .mk-sun { fill: #ff6e42; }
+.pa2-fig .mk-lut { fill: #8bc34b; }
+.pa2-fig .mk-vio { fill: #b57bff; }
+.pa2-fig .mk-cloud { fill: #9e9e9e; }
+.pa2-fig .sw { rx: 2; }
+
+/* refraction horizon figure */
+.pa2-fig--flat { padding: 0; overflow: hidden; }
+.pa2-fig--flat svg { width: 100%; }
+.pa2-fig--flat figcaption { padding: 8px 12px 10px; }
+.pa2-fig .rf-sky-a { fill: #e3f1fb; }
+.pa2-fig .rf-sky-b { fill: #fbeadf; }
+.pa2-fig .rf-ground { fill: #c9d2c4; }
+.pa2-fig .rf-straight { stroke: #666666; }
+.pa2-fig .rf-bent { stroke: #02a6f2; }
+.pa2-fig .rf-bent-fill { fill: #0277bd; }
+.pa2-fig .rf-apparent { stroke: #ff6e42; }
+.pa2-fig .rf-apparent-fill { fill: #d84a1b; }
+.pa2-fig .rf-sun { fill: #ff6e42; }
+.pa2-fig .rf-ink { fill: #000000; }
+.pa2-fig .rf-ink-stroke { stroke: #000000; }
+.pa2-fig .rf-mut { fill: #666666; }
+.pa2-fig .rf-label { font: 400 12.5px Inter, -apple-system, Helvetica, Arial, sans-serif; fill: #000000; }
+.md-typeset .pa2-fig { width: auto; text-align: left; }
+.md-typeset .pa2-fig figcaption { max-width: none; margin: 8px 0 0; text-align: left; }
