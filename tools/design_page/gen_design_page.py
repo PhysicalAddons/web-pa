@@ -33,15 +33,17 @@ DOCS = [
         slug="refraction",
         label="design",
         css="label-research",
-        status="Design · stage 0 of 5 done",
+        status="Shipping · every stage landed · amended 06.09.2026",
         date="03.09.2026",
         figure="refraction_figure.html",
         summary=(
             "One ray-marched refraction law for sky, ground and celestials: "
             "bending from the air's pressure and temperature profile, the "
-            "green flash, horizon shimmer and space views. Stage 0, the CPU "
-            "reference model, is done; the GPU integrator and its consumers "
-            "are open."
+            "green flash, horizon shimmer and space views. Every stage has "
+            "landed: bent view rays for sky, ground, clouds and celestials, "
+            "dispersion, the shimmer split and Young's inversion presets. "
+            "Amended with the sun's chromatic limb law and the LUT sky's "
+            "horizon-band transmittance limit."
         ),
     ),
     dict(

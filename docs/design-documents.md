@@ -9,7 +9,7 @@ How _Physical Atmosphere²_ renders, and why it renders that way: the architectu
 | Section | Status | Date |
 | --- | --- | --- |
 | [Rendering pipeline](#pipeline)<br><small>The architecture reference: one atmosphere core compiled many ways, the rect and equirect renderers, the TAA round, shader assembly, every pass and LUT, and how the sky reaches EEVEE and Cycles.</small> | `reference:`{: .label-improvements } Architecture reference | 03.09.2026 |
-| [Atmospheric Refraction — ray-marched, one law for sky, ground and celestials](#refraction)<br><small>One ray-marched refraction law for sky, ground and celestials: bending from the air's pressure and temperature profile, the green flash, horizon shimmer and space views. Stage 0, the CPU reference model, is done; the GPU integrator and its consumers are open.</small> | `design:`{: .label-research } Design · stage 0 of 5 done | 03.09.2026 |
+| [Atmospheric Refraction — ray-marched, one law for sky, ground and celestials](#refraction)<br><small>One ray-marched refraction law for sky, ground and celestials: bending from the air's pressure and temperature profile, the green flash, horizon shimmer and space views. Every stage has landed: bent view rays for sky, ground, clouds and celestials, dispersion, the shimmer split and Young's inversion presets. Amended with the sun's chromatic limb law and the LUT sky's horizon-band transmittance limit.</small> | `design:`{: .label-research } Shipping · every stage landed · amended 06.09.2026 | 03.09.2026 |
 | [1:1 Window-mapped sky — design & stage plan](#window-sky)<br><small>The sky and composed ground are marched at exact view resolution through Window-coordinate mapping, with EEVEE's own temporal AA recipe and the hybrid cut against scene geometry. Amended with what actually shipped and where it departs from the plan.</small> | `shipped:`{: .label-fixed } Shipped · amended 03.09.2026 | 04.08.2026 |
 | [Optimized cloud rendering: interleaved low-res march + temporal upscale](#cloud-upscale)<br><small>The cloud march leaves the 1:1 sky pass for its own interleaved low-resolution pass with a KSA-style temporal resolve, the KSA march port and the dual-paraboloid shadow volume. Includes the fidelity audit against the KSA sources and the cost measurements.</small> | `shipped:`{: .label-fixed } Shipped · stages 1–4 and 2b | 05.08.2026 |
 | [North Offset — Design (2026-07-31)](#north-offset)<br><small>A single angle that rotates the modelled world against true north, so GIS-derived geometry keeps its imported orientation. Scoped and costed, then postponed to a later version.</small> | `deferred:`{: .label-deferred } Deferred | 31.07.2026 |
@@ -400,7 +400,7 @@ Three mechanisms cooperate so that a mesh gets aerial perspective up to its surf
 
 ## Atmospheric Refraction — ray-marched, one law for sky, ground and celestials {#refraction}
 
-`design:`{: .label-research } Design · stage 0 of 5 done · 03.09.2026 · `docs/design-refraction-2026-09.md`
+`design:`{: .label-research } Shipping · every stage landed · amended 06.09.2026 · 03.09.2026 · `docs/design-refraction-2026-09.md`
 
 **In this document:** [1. What exists today, and why it is "not functional"](#refraction-1-what-exists-today-and-why-it-is-not-functional) · [2. Requirements → design decisions](#refraction-2-requirements-design-decisions) · [3. Physics](#refraction-3-physics) · [4. Architecture](#refraction-4-architecture) · [5. Data, UI, keys](#refraction-5-data-ui-keys) · [6. Stages](#refraction-6-stages) · [7. Verification](#refraction-7-verification) · [8. Risks and known limits](#refraction-8-risks-and-known-limits) · [9. What we take from the references, and where we depart](#refraction-9-what-we-take-from-the-references-and-where-we) · [10. Open questions for the user](#refraction-10-open-questions-for-the-user)
 
@@ -433,9 +433,18 @@ Three mechanisms cooperate so that a mesh gets aerial perspective up to its surf
 <figcaption>The ground viewer's horizon ray. Refraction is exaggerated for the drawing; the real bend is 34′ at the horizon and the lifted horizon is 10 % further. Everything the design does follows from walking that curve step by step and asking, at every consumer, "where am I and which way am I looking".</figcaption>
 </figure>
 
-Status: DESIGN (2026-09-03). Nothing here is implemented. Supersedes the
-2026-07 effective-sphere stub (2.6.1 "Atmospheric Refraction", off by
-default since f459319). User direction (2026-09-03):
+Status: SHIPPING (written 2026-09-03 as a design; amended as stages
+land). Every stage has landed in the tree: the LUT generations walk the
+bent path (0381b1a, 11792e8, a6ebfb4); the stage-1 batch — bent view rays,
+shimmer, dispersion, North Offset, presets (adb7553); the shimmer split
+into temperature masses + a near field inside the walk (cec18cd); the
+walk's end-step clip (984808b); shimmer under a duct (ba67fbb); spectral
+dispersion by wavelength dither in the celestial arm (c444b61); the
+temperature masses as a temperature field (7ecb762); the sun's chromatic
+limb law (2026-09-06, §4.7). Open: the LUT sky's horizon-band
+transmittance (§8). Supersedes the 2026-07 effective-sphere stub (2.6.1
+"Atmospheric Refraction", off by default since f459319). User direction
+(2026-09-03):
 
 - one refraction for celestials, ground and atmosphere at the same time;
 - bending from the air's pressure and temperature gradient;
@@ -456,7 +465,10 @@ References: W. Bislin, *Deriving Equations for Atmospheric Refraction*,
 Simulator* (walter.bislins.ch); A. T. Young, *Green Flash Simulations*
 (aty.sdsu.edu/explain/simulations: standard-atmosphere, inferior-mirage,
 mock-mirage, ducted and sub-duct sunsets, `how.html`, Wegener's
-principle). What we take from them and where we depart is listed in §9.
+principle); H. Neckel & D. Labs (1994), *Solar limb darkening 1986–1990
+(λλ 303 to 1099 nm)*, Solar Physics 153, 91–114 — the per-channel limb
+law of the sun's disc, which the mirage folds slice (§4.7). What we take
+from them and where we depart is listed in §9.
 
 ### 1. What exists today, and why it is "not functional" {#refraction-1-what-exists-today-and-why-it-is-not-functional}
 
@@ -644,7 +656,7 @@ a later profile option with no shader change.
     UBO  rf_cfg, rf_cfg2, rf_shim, rf_disp, rfg[64]      (+272 floats, +1 KB)
            │
            ▼
-    GLSL shaders/passes/refraction_lib.glsl
+    GLSL shaders/atmosphere_15/atmosphere_refraction_lib.glsl
          pa2RefrG(h)                 table fetch (all passes)
          pa2RefrTrace(ro, rd, …)     full geometric walk → end kind, s_end, p_end, d_end, β
          pa2RefrAdvance(state, s)    incremental provider: position/direction at arc length s
@@ -758,6 +770,33 @@ limb ray, 20–40 with a strong mirage layer.
 Termination: GROUND, EXIT (h ≥ h_top ascending), CAP (s ≥ 4000 km,
 bottomless only). Outputs: kind, s_end, p_end, d_end, β, plus s_deck
 (first crossing of the 2-D cloud deck altitude, or INF).
+
+##### 4.2.1 Revision 2026-09-06: the end-step clip and Simpson
+
+A per-step comparison of the Normal-tier walk against a 12,000-step
+reference (one horizon ray, standard air, eye 2 m) tracked to 0.1″
+until the last step and then lost 6.5″ and 180 m of path there: the
+shell-top exit was a linear clip (h_top − h)/(h_new − h) using the
+full 40 km step's midpoint rate, whose elevation sits ~11 km further
+along the path (1 % in sin el, 190 m of clipped length), and the commit
+applied the unclipped midpoint rates to the clipped step. The clip
+fraction varies with the ray, so the error jittered ±3″ between
+neighbouring rays. Invisible in clear air; a duct (5 K over 10 m, eye
+below it) maps 0.35° of apparent elevation onto 0.65′ of the sun's
+disc — a 30× magnification that showed the jitter as 2′ horizontal
+slices of the sun (user report, atmospheric_refraction2.blend). Now:
+the top crossing solves the ground's quadratic h + σ cz + ½ σ² sz²
+(1/r + g) = h_top (stable root), every clipped step recomputes its
+midpoint rates, and the gradient across a step is Simpson's
+(g₀ + 4 g_m + g₁)/6 with g₁ at the step's end (one more table read;
+it halves the residual). Twin numbers (jitter = max second difference
+of the exit elevation over 0.15′ samples, bias vs the reference):
+standard air 13.6″/6.9″ → 1.3″/0.6″ at Normal, 0.2″/0.08″ at High;
+the duct scene 0.69″ → 0.12″. Two rules that did NOT help, recorded:
+refining the step where the table's G varies across a cell (it
+refined only once inside the ramp) and a look-ahead RK2 error bound
+(it re-phased the steps and doubled the jitter) — the error was never
+in the gradient's averaging. Step budget 512 (was 256).
 
 #### 4.3 Two APIs, no polyline storage
 
@@ -959,6 +998,80 @@ consistent, no mirage, no limb lensing), +1 marches everything.
 - Cost: one trilinear fetch + a tangent projection, only where it
     matters.
 
+##### 4.6.1 Revision 2026-09-06: two parts, both inside the walk
+
+User verdicts on the first build: the world-space tier at Eddy Size
+3000 m "looks more like what I see in nature", the small shimmer "just
+looks weird", and the near shimmer "needs to be part of the refraction
+pipeline, not an overlay post-fx glass filter over everything — like
+1 km long from the camera". Two parts, both kicking inside
+`pa2RfPrepare` of the TRACE walk (the providers keep the smooth path):
+
+- **Temperature masses** (the low-frequency part) replace the world
+    tier. A slow scalar field n(p) — the same volume, indexed by world
+    position over 6 × Mass Size (default 3 km), riding the updraft —
+    offsets the STANDARD air's surface gradient g₀ by A·n·e^{−h/H}
+    (H = 1.5 km, below 4H), integrated at fixed STATIONS along the ray
+    (every half cell, at least 1.25 km) and kicked into the direction
+    from the sub-step holding them: Δel = Σ A·n·e^{−h/H}·g₀·Δs·cos el,
+    never past inverting the local gradient. Two forms that did not
+    survive the day (user: "the bands reappear when shimmer is added"):
+    scaling the LOCAL gradient by (1 + A·n) — a +5 K duct is 20× the
+    standard gradient and ±100 % of it tore its fold apart (39″ of exit
+    jitter) — and point-sampling the field once per sub-step, which
+    aliased a 3 km field on 3–8 km steps and jumped with the step count
+    (7.9″ under the duct, 2.3″ in clear air; stations: 0.6″ / 0.2″).
+    This is what "eddies of 3 km" approximated with random kicks — the
+    gradient itself varying along the path — but integrated smoothly in
+    the vertical plane. Amount = the RMS fraction of g₀ (1 = the
+    standard gradient wanders by its own size: about a fifth of an
+    arcminute of horizon wander across azimuth, a few arcseconds across
+    elevation — the smooth integral cancels most of what the aliased
+    random walk showed as 0.8′). Lanes `rf_shim2` = (A/σ_vol, 1/period,
+    H, g₀·strength). Independent of the quality tier; off with Ray March
+    off (no walk).
+
+- **The near shimmer** (the small, fast part): N = 8 stations at fixed
+    arc lengths (i + ½)·L/N along the first L = 1 km of the ray; every
+    station inside a sub-step is kicked from it, the schedule itself
+    never changes (capping the sub-step at L/N re-phased the rest of the
+    walk per row — 8 to 40 capped steps depending on elevation — and a
+    duct's 30× image compression showed the walk's phase-dependent
+    residual as bands again: twin 0.12″ → 1.68″ with a ZERO field). Each
+    station kicks the direction by the transverse GRADIENT of the field's
+    x channel (central differences over ±1/24 period — a quarter fine
+    cell — along the in-plane and out-of-plane normals: curl-free, as the
+    angle of arrival through a phase screen is; the curl components
+    swirled the image like wavy glass), with N kicks of A/√N summing to
+    the amplitude A = min(A₀, A_H·N_cam·tan z) (the one-term tan law
+    clamped at the horizon: 1′ there at amount 1, 2″ at 45°, skipped when
+    sub-pixel). The eddy = Scale × L, so the far end of the field shows
+    the Scale and nearer air coarser, slower waves — the "view-aligned
+    layers summing to an fBm" for free. Positions are CAMERA-relative in
+    the walk plane's own terms ((h − h₀) − (R+h)φ²/2 along u₀, (R+h)φ
+    along e₀): the world position has half a metre of fp32 resolution at
+    earth scale against 0.87 m eddies, which snapped neighbouring rows to
+    different cells (horizontal hair on the limb); kicking at every
+    sub-step instead of fixed stations did the same. Time: the field
+    rides the updraft and slides along world X at the Boil rate (Hz / 12
+    periods per second — the value noise decorrelates over half a fine
+    cell). The out-of-plane kicks accumulate into ψ and its first moment,
+    applied at the end (exit direction turned toward the plane normal,
+    landing point slid by ψ·s − ψ_S). Steep rays (the fast path, |el| ≥
+    15°) take none: 2″ of seeing at most. Star scintillation
+    `pa2CelScint` in the rect compose: I → I·exp(σn − σ²/2), σ =
+    0.8·amount·airmass (cap 1.5), a 3′ correlation between stars, three
+    times the boil rate, chromatic by the dispersion split over 10″.
+    Lanes `rf_shim` = (A/diff_rms, A_H/diff_rms, 1/period, time),
+    `rf_wind` = (boil, σ₀, updraft, L), `rf_cfg3.zw` = (1/σ_vol, diff_rms).
+
+- **Default amount 1 → 0.3.** The probe view (`probe_shimmer_view.py`,
+    the low sun's limb from the rect's B plane) showed the real fault of
+    the first build: 1′ RMS tilt over 3′ cells gives dt/dθ ≈ 1 and the
+    mapping folds — the sun tore into detached blobs. At 0.3 (20″) the
+    edge is wavy and whole; the walk-integrated field at amount 1
+    deforms the disc strongly but no longer tears it.
+
 #### 4.7 Green flash: per-channel bending (stage 3)
 
 - Everywhere: one walk (green); the exit direction per channel is
@@ -985,6 +1098,27 @@ consistent, no mirage, no limb lensing), +1 marches everything.
     vs ≈ 9 at 610 nm on a horizon path — the aerosol slope that turns the
     rim from blue-green to green and, in ducts, kills the green entirely
     while the red flash survives).
+    AS SHIPPED (audit 2026-09-06, prompted by mock-mirage sunset photos
+    with dark bands across the disc): the BG pass multiplies the
+    celestial sampled along the walked exit direction by the AIR pass's T
+    plane at the pixel's apparent direction (`ground_compose.frag`,
+    `gcAir1x`). What that plane holds depends on the sky: the analytic
+    march samples T along the bent path per pixel; the default LUT sky
+    takes the sky-view atlas, whose texels are walked (Phase 5) but whose
+    rows above the horizon sit at 0.3′, 3′, 8′, 16′, 27′ and 40′ — a 1–3′
+    mock-mirage strip's extra extinction is bilinearly smeared, and walked
+    rays exiting below the geometric horizon take the horizon row's column
+    (the 2026-09-06 white-band fix). So in the LUT sky only the folded-limb
+    half of a dark band exists (§8).
+
+- The folded limb: a mock-mirage band is a slice of the sun's edge, so
+    the disc's limb law decides the band's darkness and colour. The port's
+    grey 555 nm quadratic (the outer 2 % of the radius 1.5–2.5× too bright,
+    no limb reddening) was replaced 2026-09-06 by the Neckel & Labs 1994
+    5th-order polynomial per channel (615/535/445 nm: limb 0.38/0.32/0.22
+    of centre, 1.76× redder than the centre), normalized to the disc mean
+    — `sunrad` is the AM0 irradiance over the disc's solid angle, and the
+    drawn disc had integrated to 0.776 of it (`pa2CelSolarLimb`).
 
 - Cost: 3 walks on ≤ 5 % of the BG pixels at telephoto only, ~2–5 ms
     at 4K.
@@ -1014,7 +1148,7 @@ consistent, no mirage, no limb lensing), +1 marches everything.
 | lane | x | y | z | w |
 |---|---|---|---|---|
 | `rf_cfg` | strength (0 = off, 1 = physical) | N₀ = n₀−1 at 550 nm | sin(el_fast) | h₀ (table knee, m) |
-| `rf_cfg2` | h_max (m) | asinh(h_max/h₀) | c_h (cells/step) | s_max (m) |
+| `rf_cfg2` | walk ceiling = the march's shell top (m) | asinh(h_max/h₀) | c_h (cells/step) | s_max (m) |
 | `rf_shim` | a₀·shimmer (rad) | S (volume periods per rad) | scene time (s) | d_ref (m) |
 | `rf_wind` | V_world.x (m/s) | V_world.y | V_world.z (v1: updraft × up; later: + map wind × s_w) | spare |
 | `rf_disp` | N_R/N_g | N_B/N_g | sin(el_disp) (0 = dispersion off) | N(h_cam) (fast-path tan law) |
@@ -1032,7 +1166,11 @@ Existing, kept: `atmosphere_refraction` (default ON once stage 2 lands —
 user call), `atmosphere_refraction_strength`,
 `atmosphere_ground_temp_delta_k`, `atmosphere_ground_layer_m`.
 New: `atmosphere_refraction_shimmer` (0..2, 1 = 1′ at the horizon,
-default 1), `atmosphere_refraction_shimmer_scale` (arcmin, default 3),
+default 0.3 since 2026-09-06), `atmosphere_refraction_shimmer_scale`
+(arcmin at the far end of the 1 km near field, default 3),
+`atmosphere_refraction_boil_hz` (default 4),
+`atmosphere_refraction_mass_amount` (the temperature masses, default
+1) and `atmosphere_refraction_mass_size_m` (default 3000),
 `atmosphere_refraction_updraft` (m/s, default 1; the wind-map
 "Surface Wind" knob joins it when the postponed drift lands),
 `atmosphere_refraction_dispersion` (bool, default ON with refraction —
@@ -1098,6 +1236,30 @@ Each stage ships alone; the branch is `celestials-rect`.
    effective-sphere copies and the psi constant. Interim known
    artefact: clouds still ride straight rays, so a deck reaching the
    horizon sits ~34′ low against the lifted sea until stage 2.
+   DONE 2026-09-03 (uncommitted). As built: the library is
+   `shaders/atmosphere_15/atmosphere_refraction_lib.glsl` (inside the
+   atmosphere blob so the march lib can include it; the compose
+   includes it across the blob boundary) with the walk in a
+   prepare/commit pair shared by the trace and the incremental
+   provider; the walk state keeps the ELEVATION, not the zenith angle
+   (fp32 precision on grazing rays); the aerosol phase is a per-sample
+   ratio (the start and exit-direction stations interpolated in
+   cos θ) instead of a 3-station lerp in t; the driver hands the walk
+   to `atmosphere_clouds` through globals (its signature is shared by
+   every lib pass). UBO: `rf_cfg2.x` carries the march's shell top (the
+   walk ceiling), not h_max. Verified by `scripts/probe_refraction.py`
+   (windowed Vulkan run — Windows has no GPU context in --background):
+   every rect build compiles with the walk (frag + compute, sky + cloud
+   pass, both compose variants); a compute kernel running
+   `pa2RefrTrace` on 256 rays across the horizon band matches the
+   numpy twin on the SAME lanes — kinds 256/256, bend ≤ 0.72″, path
+   ≤ 5e−4, end altitude ≤ 1 m; the apparent dip from a 6 m eye is 4.24′
+   against 4.70′ geometric; strength 0 lands on the analytic chord. Unit
+   suite 74/74 with `RefractionTableTests` (twin vs reference: horizon
+   ≤ 20″, 45° ≤ 1″, dip ≤ 2″, limb ≤ 0.02°, mirage fold ≤ 1.5′). Also
+   fixed on the way: `_CEL_ANCHOR` had drifted from the driver's
+   coverage-mix rename (the Metal/CPU-publish with-B build could not
+   compile at HEAD). Field verdicts pending.
 
 2. **Clouds + the rest of the ray owners** — KSA march + inline arm on
    Advance, 2-D deck via s_deck, terrain heightmap walk, airglow and
@@ -1108,11 +1270,119 @@ Each stage ships alone; the branch is `celestials-rect`.
    in the horizon band gated by the visible R–B split, the elevated
    inversion in the profile bake, Young's case presets. Acceptance =
    Young's four sunsets (§7).
+   DISPERSION DONE 2026-09-03 (user: "can you add spectral response?";
+   uncommitted). As built: `rf_disp` = (N_R/N_g, N_B/N_g, sin 3°, N(h_cam))
+   with the ratios from Ciddor at the march's 615/535/445 nm and the
+   scene's T/P/RH/CO₂ (0.9951 / 1.0093 standard); a per-walk scale
+   `g_pa2RfGScale` on the table fetch (and on the fast path's ΔN) so
+   one table serves every channel; `pa2RefrDisperseDir` rotates green's
+   exit by β·(N_λ/N_g − 1) about the ray plane's normal — the fast
+   path now reports its rotation as β and both branches set the plane
+   axis; `pa2RectCelestialsRGB` evaluates the celestial arm once per
+   channel only where the R–B split exceeds 0.1·θ_pix (a landed channel
+   is occluded). The compose re-walks R and B in the |el| < 3° band on
+   EXIT rays (the fold sits at a different elevation per wavelength);
+   the render/CPU-publish splice uses the rotation only. Ground and
+   clouds stay green. Property `atmosphere_refraction_dispersion`
+   (default ON; it costs nothing until the split is visible).
+   Measured (probe, 256 horizon rays): the blue re-walk bends 1.0100×
+   green against the 1.0093 lane — the more-refracted path sits deeper
+   in dense air, a real 7 % second-order excess; the first-order
+   rotation matches the re-walk to < 3″ outside a fold. Suite 75/75.
+   PRESETS + TOGGLES DONE 2026-09-03 (user: "add these presets - and the
+   refraction settings needs its own tab inside the atmosphere tab in
+   UI ... make all the refraction features togglable, so if everything
+   is disabled, it runs fast"): the elevated inversion rides three
+   properties (`atmosphere_refraction_inversion_height_m /
+   \_thickness_m / \_delta_k`) driven by an enum preset
+   (`atmosphere_refraction_inversion_preset`: None, Mock Mirage +0.8 K
+   30–50 m, Duct +2 K 50–60 m, Sub-duct / Santa Ana +15 K 200–250 m,
+   Custom) whose update writes the layer into the values; the bake
+   reads them through `scene_refraction_inputs`, which also carries the
+   new **Mirage Layers** toggle (`atmosphere_refraction_mirage`, default
+   off: the surface layer and the inversion are ignored → the clean ISA
+   profile). Feature toggles: **Ray March** (`_march`, default on; off =
+   sin(el_fast) = −1, every ray takes the one-rotation fast path, no
+   walk anywhere, the world shimmer tier falls back to the sky tilt,
+   the mirage block greys out), **Mirage Layers**, **Shimmer**
+   (`_shimmer_enabled`), **Dispersion**. The fast path is now capped at
+   the horizon refraction scaled by the ray's refractivity share
+   (`rf_cfg3.x` = δ_horizon; `_UBO_FLOATS` +4), so it is valid at every
+   elevation, and `pa2RefrSunSphere` returns the true sphere without a
+   table fetch when the strength is 0 — with the master off nothing
+   refraction-related runs per sample. UI: the toggle is followed by a
+   boxed group (Strength, Ray March, Mirage Layers → Ground ΔT / Layer /
+   Inversion preset + Base / Thick / ΔT, Shimmer → Amount / Scale /
+   Eddy / Updraft, Dispersion). Tests: `test_feature_toggles`,
+   `test_inversion_presets` (real scene props); suite 77/77, probe
+   46/46.
 
 4. **Shimmer** — the turbulence volume sampled on the sphere (one
    fetch; the compose binds the existing texture on slot 23), rigid
    updraft drift on `rf_wind`, amplitude law, time lane, knobs, cutoff.
    Wind-map drift stays postponed (§4.6) until asked for.
+   DONE 2026-09-03 (pulled ahead of stage 2 by the user; uncommitted).
+   As built: `pa2RefrShimmer` in the refraction lib, called by the air
+   pass and the compose right before the trace (the tilted direction
+   feeds the walk, so the ground hit and the exit pose both carry it);
+   the amplitude law is the ONE-term tan law N·tan z clamped at the
+   horizon value — the two-term form's cubic goes negative past ~85°
+   and zeroed the shimmer exactly at the horizon in the first probe;
+   lanes `rf_shim` = (A/RMS_volume, A/(RMS·δ_horizon), S = 1/(scale ×
+   6 fine cells), scene time) and `rf_wind` = (0, 0, updraft, 2 km);
+   the compose gets `uCloudTurb3D` on slot 23 in both builders, bound
+   at all three dispatch sites; three properties (Shimmer, Scale ′,
+   Updraft m/s) on the Atmosphere tab; the state key carries the knobs
+   always and scene time only while the shimmer animates (`with_time`).
+   Measured (chord metric, 256 horizon rays): in-kernel tilt 1.41′ RMS
+   total = 1.0′ per axis at amount 1; the exit direction moves 0.99′
+   RMS (the refraction gradient damps the input tilt by ~0.7); t = 4 s
+   vs t = 0 differ by 1.56′ RMS (decorrelated), and with the updraft
+   zeroed the two are bit-identical. Metric trap recorded: acos(dot) on
+   fp32 unit vectors has a 1–2′ floor; small angles are chords.
+   Equirect fold: the compose's walk (and so the shimmer) is gated to
+   rect mode (`sz.z`) — the equirect never bends.
+   HIGH TIER, world-space (user 2026-09-03: "this is good for low tier,
+   make the high tier, where the shimmer is sampled in world space").
+   Presets HIGH / EPIC / CUSTOM (`_shimmer_world`): the turbulence is a
+   refractive-index FIELD in space — the same curl volume, now indexed
+   by the sub-step's world position over a period of 6 × Eddy Size
+   (new knob, metres, default 20) plus the updraft drift — and every
+   sub-step of the TRACE walk kicks the direction by
+   A_step·√ds·exp(−h/H_T)·v (H_T = 1 km; a random walk whose variance
+   is step-size independent, so quality tiers agree statistically).
+   The in-plane component turns the walk itself (`el`), so a boiling
+   horizon can land or escape a ray (the probe sees kind flips at the
+   dip); the out-of-plane component accumulates into ψ and its first
+   moment, applied at the end as an exit-direction turn toward the
+   ray plane's normal and a sideways landing offset ψ·s − ψ_S. Eddies
+   smaller than the pixel footprint at the sample average out
+   (foot = min(1, L/(θ_pix·s))): no far-field grain. The provider
+   walks (SS/MS samples) skip the field — metres apart, invisible —
+   so the cost is one fetch per sub-step of the trace, and only below
+   8·H_T (≈ the first 30 sub-steps of a horizon ray). Calibration:
+   A_step = A₀/(σ_vol·√D_eff), D_eff = √(π R′ H_T)/2 with R′ =
+   R/(1−k₀), so a surface horizon ray accumulates 1′ per axis at
+   amount 1; the twin sums k² for the check (`shim_var`). Distance
+   weighting comes free: a ground camera's near ground barely shimmers
+   (√(100 m/77 km) → 2″ at 100 m), the far ground and the horizon do.
+   Lanes `rf_shim2` = (A_step, 1/period, H_T, mode); `_UBO_FLOATS` +4.
+   Measured (probe, HIGH lanes, 256 horizon rays): exit direction 1.80′
+   RMS at amount 1, t = 4 s vs 0 decorrelated 1.64′, bit-identical
+   without drift, one kind flip at the dip. Unit suite 75/75.
+   REVISED 2026-09-06 (§4.6.1): the world tier, Eddy Size and the
+   camera-side tilt `pa2RefrShimmer` are gone; the temperature masses
+   (Masses, Size m) modulate G in the trace walk at every tier, the
+   near shimmer kicks at eight fixed stations across the first
+   kilometre of the same walk (camera-relative positions, gradient
+   kicks, Boil Hz) with star scintillation in the compose; default
+   amount 0.3. Probe: near exit 2.2′ RMS at amount 1, masses 0.78′ exit
+   RMS at amount 1 and +45 % bend under a +1 field; view probe: 0.3
+   keeps a wavy whole edge, 1 deforms without tearing. Suite 82.
+   Same day, the mirage horizon hole: the LUT arm's atlas/aerial choice
+   follows the walk's verdict, and a walked exit from below the
+   geometric horizon takes the horizon ray's atlas column
+   (`probe_horizon_hole.py`).
 
 5. **UI, presets, docs** — panel rows and readout, preset tables,
    CHANGELOG, pipeline doc, default-ON decision.
@@ -1188,6 +1458,54 @@ sunset.
 
 - **Fold-gate agreement** between the fractional air pass and the 1:1
     BG pass at the lifted horizon: same class as today, verified per §7.
+    FIELD 2026-09-03 (the user's first sunset frames): two horizon
+    defects, both in this class. (1) A white line on the disc's bottom
+    row, refraction on OR off, any Air Resolution — found 2026-09-04 by
+    `scripts/probe_horizon.py` driving the REAL TAA rounds on the live
+    planes (a single march never shows it). The rect film resolve
+    (`rect_taa_resolve.frag`) gathered its 3×3 gaussian footprint and
+    ran its capped mean across the sky/sea boundary: the boundary air
+    texel's T averaged the jittered rounds' sky samples (0.005 at the
+    horizon) with their sea samples (0.9) and settled at 0.41 under a
+    ground mask, and the BG pass premultiplied the disc by it (1.0e6
+    against 1.3e4 one row up). Fix: the resolve is VERDICT-PURE — it
+    gathers only sample texels sharing the centre sample's ground mask
+    (INDIRECT.a, sampler `smp2`) and restarts a texel's film when its
+    verdict flips (history lanes: hs.a = verdict, ht.a = count). The
+    boundary then carries a pure, young mean and the anti-aliasing
+    happens where EEVEE puts it: in the BG pass's own film over the
+    per-round verdicts. A second, fainter mechanism on the SEA side at
+    fractional air: the S-plane consumers — the world tree's Linear
+    image node and the compositor's AOV tap — upsample S with a plain
+    bilinear at the display pixel centre, blending the sky column's
+    horizon glow (S ≈ 38) into the sea column's 0.9. No consumer can
+    know the boundary; the BG pass is the only 1:1 stage that does:
+    `gcAirGather` (a 2×2 gather over the air taps sharing THIS
+    fragment's verdict, the nearest matching texel of the 4×4 block when
+    the bilinear footprint has none, plain bilinear only when the block
+    has none; a tap is PURE-verdict only — mask 0 or the full sample
+    count, so the F12 render's SUMMED planes skip their mixed boundary
+    texels too) feeds T, INDIRECT and SHADOW, and `gcAirSComp` writes
+    (verdict-matched S − the plain S the consumers will add) into B on
+    both sides of the boundary — exactly zero away from boundaries,
+    negative on the sea side, so the BG film no longer floors B at zero.
+    Laws: the air-plane film must never mix verdicts; B = everything the
+    display pixel needs minus what the world will add. Measured after
+    16 rounds: bright boundary columns 55/56 → 0/56 (1x and 0.5x air,
+    refraction on), boundary texel T 0.41 → 0.89 ground / 0.006 sky,
+    disc bottom row within 20 % of the rows above. (2) With
+    refraction on, the sun through a band just above the lifted horizon:
+    the air pass and the compose each fed the trace their OWN pixel
+    angle (the air pass runs at a fraction of the display resolution),
+    so the world shimmer's footprint factor — and with it the kicks and
+    the ground verdict near the dip — differed between the two walks;
+    where the air said ground and the compose said sky, the compose kept
+    the sun. Fixed by ONE display pixel angle on `rf_cfg3.y`, filled by
+    the gather from the stashed B dims (`_STATE["rect_b_dims"]`), read
+    by every pass (their own value only as the fallback when the lane is
+    0, i.e. no rect). Law: anything the trace consumes that could differ
+    between passes must come from the UBO, never from a pass-local
+    quantity.
 
 - **Ducting / k ≥ 1**: the view march handles it (rays never exit); the
     sun-path effective sphere clamps k ≤ 0.9. Strong inversions render a
@@ -1202,6 +1520,15 @@ sunset.
 
 - **Reflections in materials** (equirect) show an unrefracted horizon:
     ≤ 34′ mismatch in a reflection — accepted under the role law.
+
+- **Mock-mirage dark bands in the LUT sky** (2026-09-06): the extinction
+    half of a band (the strip's grazing rays run tens of km farther in the
+    low haze) needs T along the pixel's own walked path; the atlas rows
+    near the horizon (0.3′/3′/8′/16′) cannot carry it, and the below-horizon
+    exits take the horizon column. Options: a finer horizon band in the
+    atlas, or a per-pixel walked T correction in the horizon band
+    (|el| < el_disp) riding the dispersion walks. The analytic reference
+    sky has both halves; the folded-limb half is right in both (§4.7).
 
 ### 9. What we take from the references, and where we depart {#refraction-9-what-we-take-from-the-references-and-where-we}
 
@@ -1218,6 +1545,10 @@ per-channel paths, the inversion-layer cases and their numbers as the
 acceptance suite, Wegener's above/below-eye split as a test, the
 extinction argument for why rims are green rather than blue, and the
 Auer–Standish / Bouguer framing (the invariant is our drift check).
+Neckel & Labs — taken: the wavelength-parametrized 5th-order limb
+polynomial, evaluated at the march's three sampling wavelengths and
+normalized to the disc mean (the disc integrates to the AM0 irradiance
+the sky already uses).
 Departed: a 2-D (h, φ, z) state marched in arc length instead of world
 coordinates or a refraction integral (precision at earth scale, and it
 walks straight through turning points, which the integral form must
@@ -2127,9 +2458,23 @@ warp-bridge frames, the KSA-shaped levers are cheaper rays (#11) and
 
 **In this document:** [The shape of the problem](#north-offset-the-shape-of-the-problem) · [Touch points](#north-offset-touch-points) · [Decisions needed before implementation](#north-offset-decisions-needed-before-implementation) · [Exit gate](#north-offset-exit-gate) · [Cost](#north-offset-cost)
 
-**STATUS: DEFERRED.** Scoped and costed, not scheduled. Postponed to a
-later version by user decision on 2026-07-31. Nothing in this document
-is implemented; `north_offset` does not exist in the codebase.
+**STATUS: IMPLEMENTED 2026-09-04** (user request; deferred 2026-07-31).
+`north_offset` lives next to latitude/longitude. The three decisions
+below were settled as recommended: (1) sign — scene azimuth = true
+azimuth + offset, i.e. scene = Rz(−offset)·ENU, so +30° turns the
+environment 30° clockwise seen from above; (2) the azimuth readout
+stays astronomical (its description says so); (3) the georeference
+follows — the cloud map, the wind, the graticule, the city-light map,
+the star sphere, the flight paths and the compass all turn together.
+As built: `get_sun_vector`/`direction_vector_to_azimuth_elevation`
+take the offset as a third argument, `scene_from_enu_matrix` wraps
+every equatorial→ENU matrix (stars, trajectories, body rotation
+columns), the shader charts rotate through `pa2NorthToEnu` (UBO lane
+`cl_skew2.y`), and the offset is in the bake keys. Exit gate:
+`NorthOffsetTests` — bit-identical at 0, the +30° sign, the inverse
+round trip, and the matrix/vector agreement.
+
+---
 
 A single angle that rotates the modelled world relative to true north,
 so GIS-derived geometry can be used at its imported orientation instead
@@ -2890,6 +3235,12 @@ here. Thank you all.
 
 - **Ciddor** (1996), *Refractive index of air: new equations for the
     visible and near infrared* — air refractive index in the Rayleigh model.
+
+- **H. Neckel & D. Labs** (1994), *Solar limb darkening 1986–1990 (λλ 303
+    to 1099 nm)*, Solar Physics 153, 91–114 — the wavelength-parametrized
+    5th-order limb-darkening polynomial of the sun's disc, evaluated per
+    channel at 615/535/445 nm and normalized to the disc mean
+    (`pa2CelSolarLimb`, `shaders/passes/rect_celestials_lib.glsl`).
 
 - **Jarzynski & Olano** (2020), *Hash Functions for GPU Rendering* (JCGT)
     — the `pcg3d` hash behind the white-noise sample jitter.
