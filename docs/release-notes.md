@@ -1,6 +1,6 @@
 ### 3.0.7-beta <small>- released 10.09.2026</small>
 
-A beta of the 3.0 series, and everything since 2.8.1: a new sky engine, a real night, auto exposure, atmospheric refraction, ringed planets, and objects and lamps that take part in the atmosphere. Requires **Blender 5.2 or newer**, installed as an extension (drag the ZIP into Blender, or *Preferences → Get Extensions → ⌄ → Install from Disk…*); it updates 2.8.1 in place. Validated on Windows (Vulkan) and macOS (Metal); Linux/OpenGL has not had a full pass yet.
+The 3.0 series: a new sky engine, vastly improved stability and performance, auto exposure, atmospheric refraction, ringed planets, and objects and lamps that take part in the atmosphere and clouds. Requires **Blender 5.2 or newer**. It updates 2.8.1 in place. Validated on Windows (Vulkan) and macOS (Metal); Linux/OpenGL has not had a full pass yet.
 
 !!! note "The clouds are an interim system"
     The clouds in this release are temporary. Development of the real cloud system is ongoing and they will be replaced in a later release — treat the cloud controls as provisional.
