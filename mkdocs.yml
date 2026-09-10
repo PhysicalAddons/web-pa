@@ -32,7 +32,6 @@ nav:
   - Getting Started: getting-started.md
   - Documentation: documentation.md
   - Release notes: release-notes.md
-  - Design documents: design-documents.md
 extra_css:
   - stylesheets/extra.css
 extra:
