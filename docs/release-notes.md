@@ -34,7 +34,7 @@ The 3.0 series: a new sky engine, vastly improved stability and performance, aut
 
 - **Remove Atmosphere no longer crashes Blender**, and the enable-path crash family (draw-callback writes racing the world sync) is root-caused and closed.
 - **macOS:** the cloud noise and the galaxy compile again on Metal, and animation renders no longer leak a GPU stack slot per frame.
-- **The sun gizmo moves the sun again** in Artistic mode, and Add → Remove → Add leaves the sun where it was.
+- **The sun gizmo moves the sun** like it used to in Physical Starlight and Atmosphere, and Add → Remove → Add leaves the sun where it was.
 - A rendered sky scrambled on 5.2.0-alpha builds (reversed readback strides); a bright seam on the planet horizon; the white horizon line under a setting sun; a dark line under the horizon at reduced Atmosphere Resolution; the far cloud deck ending in a rectangle from high orbit; twilight decks with stripy gradients; the mirage sun sliced into bands; holes in the ground along a shimmering horizon in renders.
 - No more "Save N modified images" prompt for PA2's datablocks; a docked File or Asset Browser no longer pauses the sky; a quarter moon no longer runs 4× hot; the sun disc's limb darkening and brightness are the measured ones.
 
