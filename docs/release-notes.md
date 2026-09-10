@@ -7,42 +7,42 @@ The 3.0 series: a new sky engine, vastly improved stability and performance, aut
 
 `new:`{: .label-new }
 
-- **A new sky engine by default — LUT Atmosphere.** The visible sky now resolves from a lookup-table chain based on Hillaire's atmosphere model, at about half the cost of the old march and verified against a converged reference (clear sky 0.5 %, civil twilight 4.5 % P95). It runs in renders and at night, follows the refracted path, and lights the reflection probe. The analytic march stays available as the reference option.
-- **A real night — real radiance values, verified by path tracing.** Physical night calibration; the moon lights the atmosphere with the measured lunar phase curve; starlight and airglow join the multiple scattering with a **Starlight MS** slider; **light pollution** from real night-lights data (city map or hemisphere modes, single-city blobs, a Night Lights colour) that reaches the cloud undersides; a **Milky Way** (off by default, follows the Stars toggle); bright stars with proper halos; and an exposure range that reaches deep night (EV cap 32, EV minimum −21).
-- **Auto exposure, auto white balance, auto range placement.** A percentile-band meter with an adaptation curve (eased like an eye in the viewport, settled in renders), white balance from the physical illuminant, and the fp16 storage window placed automatically from the brightest source in the shot. Auto is the shipped exposure mode.
-- **Meter choice for Auto exposure — Sky / Viewport / Incident.** Meter the atmosphere alone, the whole Rendered viewport (objects, lamps and emission included), or the incident light like a handheld meter. The info box names the meter that delivered the reading.
-- **Atmospheric refraction, stage 1.** Bent view rays, mirages with an elevated inversion and internal gravity waves on the layers, near-field heat shimmer on turbulence physics, heat blur, spectral dispersion and a North Offset — every feature its own switch, shipping with a tuned mirage layer.
-- **Saturn, Uranus and Neptune with rings.** Accurate Saturn ephemeris from a bundled Horizons table, physical ring light transport with an exact annulus integral, gas-giant haze with a blue limb rim and seasonal blue pole, oblate planet discs on the true poles, and the full Cassini mission trajectory bundled as a path preset.
-- **Scene Lights.** Blender Point and Spot lamps light the addon ground, the air and the clouds, using EEVEE's own light law.
-- **Objects and clouds.** Your objects shadow the clouds, and scene lamps light them.
-- **Cycles Reference Atmosphere** (Scientific): one button builds an Earth-sized path-traced twin of the pure atmosphere, with a Reference Mode switch to A/B it against the real-time sky.
-- **Artistic Sky Color**: a normalised scattering-colour picker with a Strength multiplier in the Simple layout.
-- **Altitude in km and m**, a **two-way sun lamp** in Artistic mode (rotate the lamp, the sun follows), and celestial gizmos.
+- **A faster, more accurate sky.** The sky is now computed from precomputed lookup tables (based on Hillaire's atmosphere model) instead of being marched pixel by pixel. It costs about half as much and matches a fully converged reference to within half a percent on a clear day. The old method is still there as the reference option if you want to compare.
+- **A real night — real radiance values, verified by path tracing.** Moonlight actually lights the sky and the ground, and follows the real phase curve (a quarter moon is no longer four times too bright). Starlight and airglow are in. Light pollution comes from real night-lights data — from a city map or as a hemisphere glow — and reaches the undersides of clouds. There is a Milky Way (off by default; it follows the Stars toggle), bright stars have proper halos, and the exposure range now goes all the way down to a dark night.
+- **Auto exposure, auto white balance, auto range.** Exposure meters the scene the way a camera does — the bright part of the frame lands on middle grey, dark scenes are allowed to stay dark, and the viewport eases into changes like an eye would while renders use the settled value. White balance is taken from the actual light falling on the scene. The storage range that keeps highlights from clipping is placed automatically. Auto is the default exposure mode.
+- **Choose what Auto exposure meters.** *Sky* meters the atmosphere alone (the previous behaviour). *Viewport* meters what you actually see in the Rendered viewport — your objects, lamps and glowing materials included — so an interior or a wall no longer gets exposed for the sky behind it. *Incident* works like a handheld light meter: it exposes for the light on the scene and ignores what is in frame. The info box tells you which meter delivered the reading.
+- **Atmospheric refraction.** Light rays now bend through the air. The sun flattens and lifts at the horizon, you get mirages with an adjustable inversion layer and gentle waves, heat shimmer close to the ground, and colour fringing at the sun's edge. Every part has its own switch, and it ships with a tuned mirage layer.
+- **Saturn, Uranus and Neptune have rings.** Saturn's position comes from a bundled ephemeris table, the rings are lit physically, the gas giants have haze with a blue limb and seasonal poles, and planets are properly flattened at the poles. The full Cassini mission trajectory is bundled as a flight-path preset.
+- **Your lamps light the scene's atmosphere.** Blender Point and Spot lights now light the addon's ground, the air and the clouds, using the same light law EEVEE uses on your meshes.
+- **Your objects shadow the clouds.**
+- **Cycles reference atmosphere** (Scientific): one button builds a path-traced twin of the atmosphere, with a switch to A/B it against the real-time sky.
+- **Artistic Sky Color:** pick the sky's scattering colour and strength directly in the Simple layout.
+- Altitude can be typed in kilometres or metres; in Artistic mode you can rotate the sun lamp itself and the sun follows; the sun, moon and planets have gizmos in the viewport.
 
 `improvements:`{: .label-improvements }
 
-- **Clouds rebuilt** on a pipeline ported from KSA: a baked density model with a per-layer weather chart and a Worley mip atlas (about 5× faster cloud passes), 3×3 interleaved sampling with motion vectors, a quality ladder that drives the march, clouds composited at full resolution whatever the Atmosphere Resolution, and a shadow volume anchored to a fixed 1 km cell that no longer flickers under camera motion.
-- **1:1 window sky.** The sky rectangle is sized to the exact on-screen pixels (the camera frame in camera view) and renders serve full-frame pixels; **Atmosphere Resolution** now only scales the air texture.
-- **Principled ground.** One GGX lobe unifies specular, sky reflection and roughness on land and water; exact sun and moon disc speculars; reflections carry multiple scattering and ozone. Ground off is bottomless by default.
-- **Range Placement is brightness-neutral** — the slider only places the fp16 storage window, the display exposure compensates — and the scene's own lamps now follow it through their Exposure field, so they no longer drift when it moves.
-- **Objects cut into the sky** with a hybrid silhouette + haze composite that puts depth-correct aerial perspective on geometry; the compositor is AOV-only and lighter.
-- **Cycles** gets a two-tier sky publish (a tiny draft, then a 1:1 settled image), follows dragging promptly and no longer waits half a minute for the sky.
-- **Interface: Simple and Scientific.** The Advanced tier is gone — Simple carries the everyday controls, Scientific everything (a saved Advanced preference falls back to Simple; pick Scientific once). Moon and Ground sections and the refraction toggle join the Simple layout; the three cloud decks get their own groups; the EV100 readout speaks photography; Post Processing carries its mode in the header.
-- **Removing PA2 restores everything it changed** — the previous world, exposure, white balance, view transform and render lock — and resources are shared correctly across several enabled scenes.
+- **Clouds are faster and sharper.** The cloud pipeline was rebuilt (ported from KSA): cloud passes are about five times faster, clouds are composited at full resolution regardless of the Atmosphere Resolution setting, and cloud shadows no longer flicker when the camera moves. See the note above — this is the interim system.
+- **The sky is pixel-exact.** The sky is rendered at exactly the size it appears on screen (the camera frame in camera view), and renders get full-resolution pixels. Atmosphere Resolution now only affects the air haze texture.
+- **A better ground.** Land and water share one physically based shading model with proper roughness, and reflections of the sun and moon on water are exact. With the ground turned off the world is bottomless by default.
+- **The Range slider no longer changes your lamps.** Moving the range placement (or Auto Range doing it for you) used to make the scene's own lamps brighter or darker. It doesn't any more.
+- **Objects blend into the atmosphere properly.** Geometry is cut into the sky with a clean silhouette and depth-correct haze, and the compositor setup is lighter.
+- **Cycles updates faster.** The sky arrives as a quick draft first and a full-resolution image once you stop moving; Cycles no longer waits half a minute for it.
+- **Two interface tiers instead of three.** *Simple* has the everyday controls, *Scientific* has everything. If you had *Advanced* selected, you'll land on Simple — pick Scientific once. Moon, Ground and the refraction toggle are now in Simple; the three cloud layers have their own groups; the exposure readout speaks in photographic EV; Post Processing shows its mode in the header.
+- **Removing the atmosphere restores everything it changed** — your previous world, exposure, white balance, view transform and render lock — and several scenes in one file can share the atmosphere without stepping on each other.
 
 `fixed:`{: .label-fixed }
 
-- **Remove Atmosphere no longer crashes Blender**, and the enable-path crash family (draw-callback writes racing the world sync) is root-caused and closed.
-- **macOS:** the cloud noise and the galaxy compile again on Metal, and animation renders no longer leak a GPU stack slot per frame.
-- **The sun gizmo moves the sun** like it used to in Physical Starlight and Atmosphere, and Add → Remove → Add leaves the sun where it was.
-- A rendered sky scrambled on 5.2.0-alpha builds (reversed readback strides); a bright seam on the planet horizon; the white horizon line under a setting sun; a dark line under the horizon at reduced Atmosphere Resolution; the far cloud deck ending in a rectangle from high orbit; twilight decks with stripy gradients; the mirage sun sliced into bands; holes in the ground along a shimmering horizon in renders.
-- No more "Save N modified images" prompt for PA2's datablocks; a docked File or Asset Browser no longer pauses the sky; a quarter moon no longer runs 4× hot; the sun disc's limb darkening and brightness are the measured ones.
+- **Remove Atmosphere no longer crashes Blender**, and the crash that could happen when adding the atmosphere is fixed at the root.
+- **macOS:** the cloud noise and the Milky Way compile again, and animation renders no longer leak GPU memory frame by frame.
+- **The sun gizmo moves the sun** like it used to in Physical Starlight and Atmosphere, and adding, removing and re-adding the atmosphere leaves the sun where it was.
+- A scrambled sky in renders on early 5.2 alpha builds; a bright seam at the planet's horizon; a white line under a setting sun; a dark line under the horizon at reduced Atmosphere Resolution; the far cloud deck ending in a straight edge from high orbit; banding in twilight cloud decks; the mirage sun sliced into bands; holes in the ground along a shimmering horizon in renders.
+- No more "Save modified images" prompt for the addon's own images; a docked File or Asset Browser no longer pauses the sky; the sun disc's brightness and limb darkening now match measurements.
 
 `research:`{: .label-research }
 
-- Lock Interface is required while PA2 is enabled (Blender needs it to render safely); removal restores your setting.
-- Background and animation renders: Blender provides no GPU context to add-ons after the first frame, so the baked sky cannot update per frame in that job. Sun, moon and planet motion still renders.
-- The Viewport meter needs a Rendered-shading 3D view; renders reuse its last reading, and the Sky meter stands in when there is none.
+- Lock Interface is required while the atmosphere is enabled (Blender needs it to render safely). Removing the atmosphere restores your setting.
+- In background and animation renders, Blender gives add-ons no GPU access after the first frame, so the baked sky (atmosphere and clouds) cannot update per frame in that job. The sun, moon and planets still move.
+- The Viewport meter needs a 3D viewport in Rendered shading; renders reuse its last reading, and the Sky meter takes over when there is none.
 
 
 ### 2.8.1 <small>- released 12.08.2026</small>
