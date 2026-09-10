@@ -294,6 +294,9 @@ There is no per-pass GLSL duplication. Every march-family pass is assembled at l
 | shape noise 3D + LOD | 64³ (atlas-baked) | cloud density everywhere | once · disk-cached |
 | blue noise | 1024² RGBA16F | march jitter (.x) · caster penumbra (.z) | once |
 | Mie phase LUT | EXR, angle × droplet size | cloud phase function | selection change |
+| transmittance LUT | 256×64 RGBA16F | the LUT atmosphere (3.0): optical depth to the top of the atmosphere per altitude and zenith angle | atmosphere key change (keyed generations, last-good kept) |
+| sky-view LUT + atlas | 192×256 per generation, packed to one RGBA32F atlas | the LUT atmosphere: phase-free in-scatter for pure-sky rays, resolved by the rectangle and the lighting equirect (LUT Lighting Sky) | atmosphere or sun key change |
+| aerial LUT | 96×96×96, six 3D planes + a range plane | the LUT atmosphere: aerial perspective in front of ground, objects and clouds | atmosphere or sun key change |
 | star catalog ×2 | 2048×1024 | one star per texel: mag/CI + position | once |
 | moon · Saturn · rings | octahedral / 2k | celestials lib (moon parallax + shadow cone) | once |
 | light pollution pyramid | 2048×1984 atlas | night arm, level picked by sample altitude | map change |
@@ -377,3 +380,16 @@ Three mechanisms cooperate so that a mesh gets aerial perspective up to its surf
 
 !!! note "Declared-sampler discipline"
     Binding an undeclared sampler name corrupts the heap before it raises. Hence the frozen sampler sets per build and the `with_b` flag threaded through every builder: a build without the background plane must never be handed the star maps, and a 5-output image list must never reach a 4-output shader.
+
+### Since 3.0 — what moved {#pipeline-since-3-0}
+
+The reference above describes the analytic pipeline of the 2.x releases; 3.0 keeps its structure and replaces several stages. In brief, as of 3.0.7-beta:
+
+- **The visible sky is a LUT chain** based on Hillaire's atmosphere model — transmittance, sky-view and aerial LUTs (table above) resolved by the rectangle's air pass — and the lighting equirect resolves the same chain (*LUT Lighting Sky*). The analytic march is the reference option (*LUT Atmosphere (Rect)* off) and the correctness gate: clear sky 0.5 %, twilight 4.5 % P95 against a converged reference. See the [LUT atmosphere design](#lut-atmosphere).
+- **Clouds are an interim system** on a pipeline ported from KSA: a baked density model with a per-layer weather chart and a Worley mip atlas, a 3×3 interleaved march with motion-vector resolve, a shadow volume for cloud shadows and godrays, objects shadowing the clouds and scene lamps lighting them. The light grid and the house march are gone. The real cloud renderer is in development and will replace this stage. See the [cloud design](#cloud-upscale).
+- **The ground compose is Principled**: one GGX lobe for land and water, LTC disc speculars for sun and moon, multiple scattering and ozone in the sky reflection; the Hapke-lite BRDF of the [ground design](#ground-shader) is retired.
+- **Rays bend**: the [refraction walk](#refraction) runs inside the air pass and the compose — sky, ground, clouds and celestials share one law — with shimmer, mirages and dispersion.
+- **Blender lamps enter the atmosphere**: Point and Spot lights shade the composed ground, the air and the clouds through the UBO's light lanes (`sky_lights.py`, EEVEE's own light law, no shadow maps), and every non-managed lamp carries the Range placement delta in its Exposure field (`lamp_exposure.py`).
+- **Night has physical radiance**: moonlight and starlight in the multiple scattering, light pollution from a city map or hemisphere mode, a Milky Way, and a Range placement that reaches +16 stops.
+- **Exposure is metered**: the rect meter (a compute reduction over the published planes), an incident-light meter from the illuminant, and a viewport meter from a small scene-linear offscreen draw feed the Auto exposure mode; Auto Range places the fp16 window from the brightest source. See the [auto exposure design](#auto-exposure).
+- **The world fovea group is one variant** for EEVEE and Cycles (Window 1:1), the compositor is AOV-only, and the interface has two tiers, Simple and Scientific.

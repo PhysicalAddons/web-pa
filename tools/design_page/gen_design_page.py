@@ -29,11 +29,43 @@ OUT = WEB_PA / "docs" / "design-documents.md"
 # Newest first, like the release notes.
 DOCS = [
     dict(
+        file="design-auto-exposure-2026-09.md",
+        slug="auto-exposure",
+        label="shipped",
+        css="label-fixed",
+        status="Shipping · Auto modes 3.0.0-beta · Meter choice 3.0.7-beta",
+        date="07.09.2026",
+        summary=(
+            "Auto range placement, auto exposure and auto white balance on "
+            "one measurement core: a percentile-band meter over the "
+            "published planes, an adaptation curve, and the physical "
+            "illuminant. Amended with the Meter choice (Sky / Viewport / "
+            "Incident), the offscreen viewport meter and what it took to "
+            "make it read the sky, and the law that keeps the scene's own "
+            "lamps neutral under the Range placement."
+        ),
+    ),
+    dict(
+        file="design-ksa-lut-atmosphere-2026-09.md",
+        slug="lut-atmosphere",
+        label="shipped",
+        css="label-fixed",
+        status="Shipping · the default sky since 3.0.0-beta",
+        date="05.09.2026",
+        summary=(
+            "The visible sky as a lookup-table chain — transmittance, "
+            "sky-view and aerial LUTs resolved by the rectangle and the "
+            "lighting equirect — with the cloud pipeline ported from KSA "
+            "on top. The decision, the resources, every phase with its "
+            "measured gate, the review amendments and the open decisions."
+        ),
+    ),
+    dict(
         file="design-refraction-2026-09.md",
         slug="refraction",
         label="design",
         css="label-research",
-        status="Shipping · every stage landed · amended 06.09.2026",
+        status="Shipping · every stage landed · amended 10.09.2026",
         date="03.09.2026",
         figure="refraction_figure.html",
         summary=(
@@ -42,8 +74,10 @@ DOCS = [
             "green flash, horizon shimmer and space views. Every stage has "
             "landed: bent view rays for sky, ground, clouds and celestials, "
             "dispersion, the shimmer split and Young's inversion presets. "
-            "Amended with the sun's chromatic limb law and the LUT sky's "
-            "horizon-band transmittance limit."
+            "Amended with the sun's chromatic limb law, the LUT sky's "
+            "horizon-band transmittance limit, and what landed after: the "
+            "near shimmer on turbulence physics, heat blur, gravity-wave "
+            "mirage layers, and the air masses retired in favour of them."
         ),
     ),
     dict(
@@ -51,14 +85,15 @@ DOCS = [
         slug="window-sky",
         label="shipped",
         css="label-fixed",
-        status="Shipped · amended 03.09.2026",
+        status="Shipped · amended 10.09.2026",
         date="04.08.2026",
         summary=(
             "The sky and composed ground are marched at exact view "
             "resolution through Window-coordinate mapping, with EEVEE's own "
             "temporal AA recipe and the hybrid cut against scene geometry. "
             "Amended with what actually shipped and where it departs from "
-            "the plan."
+            "the plan; one fovea variant for both engines and 1:1 clouds "
+            "since."
         ),
     ),
     dict(
@@ -66,27 +101,31 @@ DOCS = [
         slug="cloud-upscale",
         label="shipped",
         css="label-fixed",
-        status="Shipped · stages 1–4 and 2b",
+        status="Shipped · superseded in part · interim system",
         date="05.08.2026",
         summary=(
             "The cloud march leaves the 1:1 sky pass for its own interleaved "
             "low-resolution pass with a KSA-style temporal resolve, the KSA "
             "march port and the dual-paraboloid shadow volume. Includes the "
             "fidelity audit against the KSA sources and the cost "
-            "measurements."
+            "measurements. Since then the light grid and the house march "
+            "are gone and the density model is the ported one; the clouds "
+            "are an interim system pending the real cloud renderer."
         ),
     ),
     dict(
         file="design-north-offset.md",
         slug="north-offset",
-        label="deferred",
-        css="label-deferred",
-        status="Deferred",
+        label="shipped",
+        css="label-fixed",
+        status="Implemented 04.09.2026",
         date="31.07.2026",
         summary=(
             "A single angle that rotates the modelled world against true "
             "north, so GIS-derived geometry keeps its imported orientation. "
-            "Scoped and costed, then postponed to a later version."
+            "Scoped and costed on 31.07.2026, implemented on 04.09.2026 as "
+            "recommended: sun, stars, cloud map, wind, city lights, flight "
+            "paths and the compass all turn together."
         ),
     ),
     dict(
@@ -94,13 +133,15 @@ DOCS = [
         slug="ground-shader",
         label="shipped",
         css="label-fixed",
-        status="Shipped · 2.7",
+        status="Shipped · 2.7 · BRDF superseded 08.2026",
         date="07.2026",
         summary=(
             "A dedicated GPU compose pass shades the planet surface "
             "offscreen and folds it into the scatter/transmittance pair: "
-            "Hapke-lite land, GGX water, water reflections, cloud bounce, "
-            "night lights and object shadows on the ground."
+            "water reflections, cloud bounce, night lights, moonlight, the "
+            "heightmap and object shadows on the ground. The Hapke-lite land "
+            "BRDF it recommends was replaced by the Principled model in "
+            "August 2026."
         ),
     ),
 ]

@@ -9,11 +9,13 @@ How _Physical Atmosphere²_ renders, and why it renders that way: the architectu
 | Section | Status | Date |
 | --- | --- | --- |
 | [Rendering pipeline](#pipeline)<br><small>The architecture reference: one atmosphere core compiled many ways, the rect and equirect renderers, the TAA round, shader assembly, every pass and LUT, and how the sky reaches EEVEE and Cycles.</small> | `reference:`{: .label-improvements } Architecture reference | 03.09.2026 |
-| [Atmospheric Refraction — ray-marched, one law for sky, ground and celestials](#refraction)<br><small>One ray-marched refraction law for sky, ground and celestials: bending from the air's pressure and temperature profile, the green flash, horizon shimmer and space views. Every stage has landed: bent view rays for sky, ground, clouds and celestials, dispersion, the shimmer split and Young's inversion presets. Amended with the sun's chromatic limb law and the LUT sky's horizon-band transmittance limit.</small> | `design:`{: .label-research } Shipping · every stage landed · amended 06.09.2026 | 03.09.2026 |
-| [1:1 Window-mapped sky — design & stage plan](#window-sky)<br><small>The sky and composed ground are marched at exact view resolution through Window-coordinate mapping, with EEVEE's own temporal AA recipe and the hybrid cut against scene geometry. Amended with what actually shipped and where it departs from the plan.</small> | `shipped:`{: .label-fixed } Shipped · amended 03.09.2026 | 04.08.2026 |
-| [Optimized cloud rendering: interleaved low-res march + temporal upscale](#cloud-upscale)<br><small>The cloud march leaves the 1:1 sky pass for its own interleaved low-resolution pass with a KSA-style temporal resolve, the KSA march port and the dual-paraboloid shadow volume. Includes the fidelity audit against the KSA sources and the cost measurements.</small> | `shipped:`{: .label-fixed } Shipped · stages 1–4 and 2b | 05.08.2026 |
-| [North Offset — Design (2026-07-31)](#north-offset)<br><small>A single angle that rotates the modelled world against true north, so GIS-derived geometry keeps its imported orientation. Scoped and costed, then postponed to a later version.</small> | `deferred:`{: .label-deferred } Deferred | 31.07.2026 |
-| [Ground Shader — Design (2026-07)](#ground-shader)<br><small>A dedicated GPU compose pass shades the planet surface offscreen and folds it into the scatter/transmittance pair: Hapke-lite land, GGX water, water reflections, cloud bounce, night lights and object shadows on the ground.</small> | `shipped:`{: .label-fixed } Shipped · 2.7 | 07.2026 |
+| [Auto Range placement, Auto Exposure, Auto White Balance — design (2026-09-07)](#auto-exposure)<br><small>Auto range placement, auto exposure and auto white balance on one measurement core: a percentile-band meter over the published planes, an adaptation curve, and the physical illuminant. Amended with the Meter choice (Sky / Viewport / Incident), the offscreen viewport meter and what it took to make it read the sky, and the law that keeps the scene's own lamps neutral under the Range placement.</small> | `shipped:`{: .label-fixed } Shipping · Auto modes 3.0.0-beta · Meter choice 3.0.7-beta | 07.09.2026 |
+| [KSA/KSP-style LUT atmosphere for PA2](#lut-atmosphere)<br><small>The visible sky as a lookup-table chain — transmittance, sky-view and aerial LUTs resolved by the rectangle and the lighting equirect — with the cloud pipeline ported from KSA on top. The decision, the resources, every phase with its measured gate, the review amendments and the open decisions.</small> | `shipped:`{: .label-fixed } Shipping · the default sky since 3.0.0-beta | 05.09.2026 |
+| [Atmospheric Refraction — ray-marched, one law for sky, ground and celestials](#refraction)<br><small>One ray-marched refraction law for sky, ground and celestials: bending from the air's pressure and temperature profile, the green flash, horizon shimmer and space views. Every stage has landed: bent view rays for sky, ground, clouds and celestials, dispersion, the shimmer split and Young's inversion presets. Amended with the sun's chromatic limb law, the LUT sky's horizon-band transmittance limit, and what landed after: the near shimmer on turbulence physics, heat blur, gravity-wave mirage layers, and the air masses retired in favour of them.</small> | `design:`{: .label-research } Shipping · every stage landed · amended 10.09.2026 | 03.09.2026 |
+| [1:1 Window-mapped sky — design & stage plan](#window-sky)<br><small>The sky and composed ground are marched at exact view resolution through Window-coordinate mapping, with EEVEE's own temporal AA recipe and the hybrid cut against scene geometry. Amended with what actually shipped and where it departs from the plan; one fovea variant for both engines and 1:1 clouds since.</small> | `shipped:`{: .label-fixed } Shipped · amended 10.09.2026 | 04.08.2026 |
+| [Optimized cloud rendering: interleaved low-res march + temporal upscale](#cloud-upscale)<br><small>The cloud march leaves the 1:1 sky pass for its own interleaved low-resolution pass with a KSA-style temporal resolve, the KSA march port and the dual-paraboloid shadow volume. Includes the fidelity audit against the KSA sources and the cost measurements. Since then the light grid and the house march are gone and the density model is the ported one; the clouds are an interim system pending the real cloud renderer.</small> | `shipped:`{: .label-fixed } Shipped · superseded in part · interim system | 05.08.2026 |
+| [North Offset — Design (2026-07-31)](#north-offset)<br><small>A single angle that rotates the modelled world against true north, so GIS-derived geometry keeps its imported orientation. Scoped and costed on 31.07.2026, implemented on 04.09.2026 as recommended: sun, stars, cloud map, wind, city lights, flight paths and the compass all turn together.</small> | `shipped:`{: .label-fixed } Implemented 04.09.2026 | 31.07.2026 |
+| [Ground Shader — Design (2026-07)](#ground-shader)<br><small>A dedicated GPU compose pass shades the planet surface offscreen and folds it into the scatter/transmittance pair: water reflections, cloud bounce, night lights, moonlight, the heightmap and object shadows on the ground. The Hapke-lite land BRDF it recommends was replaced by the Principled model in August 2026.</small> | `shipped:`{: .label-fixed } Shipped · 2.7 · BRDF superseded 08.2026 | 07.2026 |
 | [Credits & references](#credits)<br><small>The published work the add-on is built on: shader code used directly, techniques and ideas adapted, papers and data, and the third-party licenses.</small> | `reference:`{: .label-improvements } Credits | — |
 
 
@@ -313,6 +315,9 @@ There is no per-pass GLSL duplication. Every march-family pass is assembled at l
 | shape noise 3D + LOD | 64³ (atlas-baked) | cloud density everywhere | once · disk-cached |
 | blue noise | 1024² RGBA16F | march jitter (.x) · caster penumbra (.z) | once |
 | Mie phase LUT | EXR, angle × droplet size | cloud phase function | selection change |
+| transmittance LUT | 256×64 RGBA16F | the LUT atmosphere (3.0): optical depth to the top of the atmosphere per altitude and zenith angle | atmosphere key change (keyed generations, last-good kept) |
+| sky-view LUT + atlas | 192×256 per generation, packed to one RGBA32F atlas | the LUT atmosphere: phase-free in-scatter for pure-sky rays, resolved by the rectangle and the lighting equirect (LUT Lighting Sky) | atmosphere or sun key change |
+| aerial LUT | 96×96×96, six 3D planes + a range plane | the LUT atmosphere: aerial perspective in front of ground, objects and clouds | atmosphere or sun key change |
 | star catalog ×2 | 2048×1024 | one star per texel: mag/CI + position | once |
 | moon · Saturn · rings | octahedral / 2k | celestials lib (moon parallax + shadow cone) | once |
 | light pollution pyramid | 2048×1984 atlas | night arm, level picked by sample altitude | map change |
@@ -397,10 +402,2565 @@ Three mechanisms cooperate so that a mesh gets aerial perspective up to its surf
 !!! note "Declared-sampler discipline"
     Binding an undeclared sampler name corrupts the heap before it raises. Hence the frozen sampler sets per build and the `with_b` flag threaded through every builder: a build without the background plane must never be handed the star maps, and a 5-output image list must never reach a 4-output shader.
 
+### Since 3.0 — what moved {#pipeline-since-3-0}
+
+The reference above describes the analytic pipeline of the 2.x releases; 3.0 keeps its structure and replaces several stages. In brief, as of 3.0.7-beta:
+
+- **The visible sky is a LUT chain** based on Hillaire's atmosphere model — transmittance, sky-view and aerial LUTs (table above) resolved by the rectangle's air pass — and the lighting equirect resolves the same chain (*LUT Lighting Sky*). The analytic march is the reference option (*LUT Atmosphere (Rect)* off) and the correctness gate: clear sky 0.5 %, twilight 4.5 % P95 against a converged reference. See the [LUT atmosphere design](#lut-atmosphere).
+- **Clouds are an interim system** on a pipeline ported from KSA: a baked density model with a per-layer weather chart and a Worley mip atlas, a 3×3 interleaved march with motion-vector resolve, a shadow volume for cloud shadows and godrays, objects shadowing the clouds and scene lamps lighting them. The light grid and the house march are gone. The real cloud renderer is in development and will replace this stage. See the [cloud design](#cloud-upscale).
+- **The ground compose is Principled**: one GGX lobe for land and water, LTC disc speculars for sun and moon, multiple scattering and ozone in the sky reflection; the Hapke-lite BRDF of the [ground design](#ground-shader) is retired.
+- **Rays bend**: the [refraction walk](#refraction) runs inside the air pass and the compose — sky, ground, clouds and celestials share one law — with shimmer, mirages and dispersion.
+- **Blender lamps enter the atmosphere**: Point and Spot lights shade the composed ground, the air and the clouds through the UBO's light lanes (`sky_lights.py`, EEVEE's own light law, no shadow maps), and every non-managed lamp carries the Range placement delta in its Exposure field (`lamp_exposure.py`).
+- **Night has physical radiance**: moonlight and starlight in the multiple scattering, light pollution from a city map or hemisphere mode, a Milky Way, and a Range placement that reaches +16 stops.
+- **Exposure is metered**: the rect meter (a compute reduction over the published planes), an incident-light meter from the illuminant, and a viewport meter from a small scene-linear offscreen draw feed the Auto exposure mode; Auto Range places the fp16 window from the brightest source. See the [auto exposure design](#auto-exposure).
+- **The world fovea group is one variant** for EEVEE and Cycles (Window 1:1), the compositor is AOV-only, and the interface has two tiers, Simple and Scientific.
+
+
+## Auto Range placement, Auto Exposure, Auto White Balance — design (2026-09-07) {#auto-exposure}
+
+`shipped:`{: .label-fixed } Shipping · Auto modes 3.0.0-beta · Meter choice 3.0.7-beta · 07.09.2026 · `docs/design-auto-exposure-2026-09.md`
+
+**In this document:** [What exists today](#auto-exposure-what-exists-today) · [1. Auto Range — `camera_range_auto`](#auto-exposure-1-auto-range-camerarangeauto) · [2b. The curve, the ramp and the band](#auto-exposure-2b-the-curve-the-ramp-and-the-band) · [2. Auto Exposure — button `world.pa2_auto_exposure`](#auto-exposure-2-auto-exposure-button-world-pa2autoexposure) · [2c. The Meter choice — Sky / Viewport / Incident](#auto-exposure-2c-the-meter-choice-sky-viewport-incident) · [3. Auto White Balance — button `world.pa2_auto_white_balance`](#auto-exposure-3-auto-white-balance-button-world-pa2autowhiteba) · [Shared core — `core/exposure_auto.py`](#auto-exposure-shared-core-core-exposureauto-py) · [Laws to keep](#auto-exposure-laws-to-keep) · [Open questions for the user](#auto-exposure-open-questions-for-the-user)
+
+Status: SHIPPING — Auto exposure / white balance / range in 3.0.0-beta, the Meter choice and the lamp placement law in 3.0.7-beta (see CHANGELOG). Changes from the proposal: Auto Exposure is a live third EXPOSURE MODE (user), with a Compensation slider and an Artist-tier toggle; the meter is a GPU reduction pass (the EEVEE viewport publishes GPU-direct, so there were no free CPU arrays), double-buffered and read a round late; the ambient bands are ABSOLUTE (the band driver bakes sunrad·omegaSun in), so the sky term adds without a sun factor. Two more, measured in the scripted-GUI runs: the METER IS A COMPUTE DISPATCH (the fragment version lost a framebuffer-stack slot at every world change, 7 of 85 calls, all from the tick's TAA round — imageStore needs no bind, 0 of 78 after), and the key is the BRIGHT-HALF geometric mean (the plain log-average let the dark ground half drag a 5° sunset to EV100 8.1; the bright half meters 9.4, the photographer's table). Verified values, sun 5° / moon 35° crescent / moonless: placements −5 (sun, transmittance-dimmed) / +14 (moon) / +16 (frame); WB 5008 K tint −31 (red beam + blue sky = magenta, physical) / 4786 K / held by the illuminant floor; CM compensation exact at every placement; the slider keeps the metered EV on a switch back to Simple. PLANE UNITS LAW: the world composes B×64 + S — B is stored ÷64 for fp16 headroom (ground_compose.frag) and premultiplied by T; the meter composes the same (BG_PLANE_STORE_SCALE in sky_state) — the first build composed B·T + S and read the ground 64× too dark. Three features, one measurement core. UPDATE 2026-09-10: Auto Exposure gained a **Meter choice — Sky / Viewport / Incident** (§2c; the Viewport meter is a scene-linear off-screen draw, since no draw callback can read the scene colour), and the neutrality law was extended to the scene's own lamps (`lamp_exposure`, §2c companion fix).
+
+### What exists today (facts, measured 2026-09-07 on the live scene) {#auto-exposure-what-exists-today}
+
+| item | value | where |
+|---|---|---|
+| sun disc radiance, scene units (Y) | 2.89e6 | `solar.compute_scene_solar_parameters` |
+| sun TOA irradiance (Y) | 196 W/m² | same |
+| fp16 ceiling / clean floor | 65504 / ~6e-5 | EEVEE film + world probe |
+| Range slider → stops | `16 − 22·range` (night +16 … day −6) | `config/properties.py:range_placement_update` |
+| day default −6 st | 2.89e6 / 64 = 45 100 = ceiling / √2 | i.e. the sun disc sits **½ stop under the ceiling** |
+| CM compensation | `cm_stops = log2(exposure_scale) − wstops` | `celestial_math._apply_exposure_policy` |
+| lighting equirect | **no sun disc** (`PA2_CEL_NO_SUN`); moon + planets + stars + ground only | `sky_ground._eq_cel_sources` |
+| moon disc, full, clear | ≈ 0.12/π · 196 · Hapke centre ≈ 10–15 units | `rect_celestials_lib.glsl` Hapke block |
+| Venus disc (resolved) | 2.89e6 · Ω₁AU/π · 0.7 / 0.72² ≈ 84 units | Lambert disc law |
+| Jupiter / Saturn discs | ≈ 1–2 units | same |
+| CM white balance API | `white_balance_whitepoint` is a colour; writing it derives temperature + tint (verified both ways, restored) | Blender 5.2 `ColorManagedViewSettings` |
+| illuminant twins on the CPU | Beer/Kasten-Young sun transmittance (`shadow_plane._lamp_physical`), Chapman twin (`sky_ground._sun_trans_np`), earth idprops carry betas + scale heights | |
+| sky irradiance on the CPU | ambient atlas 64×256 RGBA, cosine bands SS rows [32,64) / MS rows [96,128), u = coschi·½+½, v = h/LAYER_PEAK_H, **per unit sun**; `tex.read()` is 64 KB | `atmosphere_cloud_ambient_lib.glsl` layout comment |
+| rect planes on the CPU | every publish tick `raw = [tex.read() …]` hands B/S/T/SHADOW/INDIRECT to numpy | `sky_rect.py` "rect readback + publish" block |
+
+Consequences that shape the design:
+
+1. The **sun's ceiling only binds when the sun disc is inside the camera frame** (rect arm). The probe never sees it.
+2. The **moon's and the planets' ceilings bind whenever they are above the horizon** — the probe sees the whole sphere. At the slider's +16 night end a full moon (≈12 units · 65536 = 7.9e5) and Venus's disc (84 · 65536) both clip in the probe. Today's night endpoint is only safe for a moonless, Venus-less sky.
+3. Everything the placement needs is either analytic (bodies) or already in numpy (planes). No new GPU work.
+
+### 1. Auto Range — `camera_range_auto` (Bool, default ON for new scenes) {#auto-exposure-1-auto-range-camerarangeauto}
+
+Peak radiance `L*` = max over:
+
+| candidate | when counted | value |
+|---|---|---|
+| sun disc | disc direction inside the rect frustum (`_STATE["rect_view"]`, overscan included) and elevation > −1° | `max(sunRadianceRgb) · T_dir(μ₀)` (the lamp's Beer/KY twin; clear-sky, clouds ignored = conservative) |
+| moon disc | above the horizon and visible (`cel_cfg.w`, `cel_mnp.w`) | `196·(0.12/π)·kph(phase)·T_dir(μ_moon)·2` (×2 = Hapke centre over the disc mean) |
+| planet discs | above the horizon and visible | `sunRad · Ω₁AU/π · A · phase / d²` per body in `_CEL_PLANETS` (albedo table: Venus 0.7, Mars 0.15, Jupiter 0.5, Saturn 0.5 + rings) |
+| measured rect | fresh `rect_stats` (serial + pose match) | max of `B·T + S` on a stride-8 grid of the last published planes — clouds, aureole, mirage sun at the limb, sunlit snow |
+| measured equirect | `PA2_ATMOSPHERE_SKY` exists and is > 4×2 | its max (what the probe actually holds) |
+| floor | always | starlight/airglow → no constraint; the +16 clamp holds |
+
+Placement: `stops = clamp(log2(46 318 / L*), −20, +16)` (46 318 = ceiling/√2 — reproduces today's −6 for the sun exactly), **quantised to whole stops** and applied only when it differs from the current value by ≥ 1 stop (hysteresis: an EEVEE restart + probe rebake per change is the only cost; brightness never moves because the CM policy compensates in the same sync).
+
+Expected placements: sun in frame −6; sun up but out of frame, clear noon ≈ +4 (aureole/cloud peak ~1e2–1e3); sunset out of frame ≈ +6; full moon up ≈ +11; Venus up ≈ +9; moonless, planet-less night +16 (today's endpoint).
+
+Hook: `celestial_math.sync_camera_exposure`, before `_apply_exposure_policy` — writes `camera_world_output_stops` through the existing property so the node, CM compensation, compositor post-exposure, sun lamp (`oscale` read live from the node) and Cycles reference all follow as they do for a manual drag. Render path: the same call from a `render_pre` handler so F12 and animation frames evaluate the placement for **their** frame (the sun crossing the frame edge mid-animation changes the storage window; the picture does not change).
+
+UI: Specialist/Scientist Range row = `[Range slider][Auto ☑]`; with Auto on the slider is greyed and the info box shows `World offset: +11 st (auto: moon)` — the binding candidate's name is worth printing. Simple tier: no row, Auto on silently (the slider was never shown there).
+
+Specular caveat: a mirror-like scene object reflects the **sun lamp**, which is not in `L*`. A dielectric highlight is `F·L_sun ≈ 0.04 · 2.9e6 = 1.2e5` units — at the +4 placement a clear noon would get with the sun out of frame that is 1.9e6, far over the ceiling; only the sun's own −6 window holds it. Hence a second toggle, `camera_range_sun_safe` (Bool, default ON, "Keep the sun's window while the sun is up, so specular reflections of the sun lamp on objects never clip"): with it on, the sun counts whenever it is above the horizon, and Auto only moves the window at twilight and night — exactly the case the slider was invented for. Turning it off makes the frustum test the rule, for pure sky shots without reflective geometry.
+
+### 2b. The curve, the ramp and the band (2026-09-07, after the first field look) {#auto-exposure-2b-the-curve-the-ramp-and-the-band}
+
+User: "the night seems to be always too bright. also it is a little choppy" +
+"check if there is an auto exposure method used in industry that just works."
+There is, it has three parts, and we were missing one of each.
+
+**The curve.** Metering every scene to middle grey IS "night as bright as day".
+Unreal ships an Exposure Compensation Curve against measured scene EV; Unity
+HDRP a Curve Mapping mode. Ours is that curve in two parameters. With `x` =
+the scene's own EV100 (`SIMPLE_BASE_EV100 - metered_ev`, the number the info
+box prints):
+
+```
+EC(x) = max( -(1 - strength) * softplus(knee - x, 1 stop), -8 )
+ev    = metered_ev + EC + compensation
+```
+
+`strength` (Adaptation, default 0.7), `knee` (Full Adaptation Above, default
+EV100 10). The softplus makes the bend ~2 stops wide, so a setting sun crosses
+it without a kink and daylight (EV100 13.7) gets EC ~ -0.008. Landing points at
+the defaults: twilight EV100 5 -> -1.5; night street 3 -> -2.1; moonlit -3 ->
+-3.9; starlit -8.6 -> -5.6 (the floor bites below ~EV100 -16). One-sided by
+design: a snow scene reading too grey is the Compensation knob's job.
+
+**The ramp.** Exponential easing UNDER a rate cap in EV/s -- 5 EV/s toward less
+exposure (light adaptation), a 2.5x lower cap toward more (dark adaptation),
+the same asymmetry as Unreal's SpeedUp 3 / SpeedDown 1 and Unity HDRP's Speed
+Dark-to-Light / Light-to-Dark. The asymmetry rides the CAP ONLY: stretching the
+easing constant with it made the last two stops of a 10-stop change take 13 of
+its 16 seconds, a stall rather than an eye. The ramp lands at 0.02 EV (1.4% of
+a stop, invisible) instead of crawling asymptotically. A plain 0.35 s exponential
+covered 2.5 stops of a 10-stop change on its first tick, which at the old 10 Hz
+sync cadence is the reported chop; the cap makes the same change cross at a
+quarter stop per tick at the watcher's 20 Hz, and the watcher now syncs every
+tick while the exposure travels. Renders never ease -- they take the settled
+target for their own frame.
+
+**The band.** The key is a percentile band of the log-luminance histogram, the
+metering law every engine ships (Unreal Low/High Percent: 10/90 today, 80/98.3
+in the UE4 default it replaced; Unity HDRP the same pair). Ours is 50-98%:
+bright-biased because the SKY is the subject here, with the top 2% trimmed so a
+sun disc or specular hit cannot drag the key down. Edge entries count
+partially, so the key moves continuously instead of flickering as cells cross
+the boundary.
+
+Sources: Epic's "How Epic Games is handling auto exposure in 4.25" and the
+Unreal Auto Exposure docs (defaults: 64-bin histogram, low 10% / high 90%,
+min/max brightness 0.03/8, SpeedUp 3 / SpeedDown 1).
+
+### 2. Auto Exposure — button `world.pa2_auto_exposure` {#auto-exposure-2-auto-exposure-button-world-pa2autoexposure}
+
+Simple mode only (the request). Metering = the display composite the world shows, `D = B·T + S`, from the last published rect planes:
+
+```
+Y      = 0.2126 R + 0.7152 G + 0.0722 B          (stride-8 grid)
+L_key  = exp(mean(log(Y + 1e-9)))                (log-average: robust to the sun's few pixels)
+ev_new = ev_cur + log2(0.18 / (L_key · exposure_scale_cur))
+```
+
+`exposure_scale_cur` is the value `compute_camera_exposure` already returns; the world-stops term is brightness-neutral so it never enters. Clamp to the property range (−21 … 32). The report line prints the resulting EV100 and the scene label (`_ev100_scene_label`).
+
+No fresh planes (viewport in Solid, or a different pose): fall back to the **incident-light meter**: `E = sunRad·Ω·T_dir(μ₀)·max(μ₀,0) + bands_cos(μ₀, h)` (same illuminant as §3), `L_key = 0.18·E/π`. Check: clear noon → EV100 ≈ 15 (the sunny-16 rule), which is the number the formula returns with these constants.
+
+Night: the log-average of a sky-only frame drives EV toward the deep-night operating point (≈19 EV simple = EV100 −6.4); this is what a camera does and the user dials back. No special casing.
+
+Physical mode: not requested; the same delta could land on `camera_exposure_bias_ev` rounded to its ½-stop items — cheap to add later.
+
+### 2c. The Meter choice — Sky / Viewport / Incident (2026-09-10) {#auto-exposure-2c-the-meter-choice-sky-viewport-incident}
+
+Status: BUILT 2026-09-10 (`camera_auto_meter`, `exposure_auto.metered_reading`, `core/view_meter.py`). User question: "about the auto exposure — does it also take into account the 3D scene?" It did not, and the answer is now a choice.
+
+#### What the shipped meter sees
+
+The rect meter reads the addon's own composed planes, `B·64 + S` — sky, clouds, celestials, addon ground/water. Nothing EEVEE draws on top is in it: **meshes, lamps on meshes, emission shaders**. Point/Spot lamps enter only through what they add to the addon ground and haze (`sky_lights`). A camera on a wall or in an interior meters the sky *behind* the geometry. Auto Range and Auto WB share the same blind spot; WB is incident-light by design so it is correct regardless, and Auto Range's peak is deliberately about what the **world** stores (a lamp on a mesh never passes through the world scale) — both stay on the rect meter. Only Auto Exposure gets the choice.
+
+#### Why not read the viewport back
+
+Checked in the Blender source (`draw_context.cc`, `view3d_draw.cc`), not assumed:
+
+| callback | framebuffer bound | contents |
+|---|---|---|
+| `PRE_VIEW` / `POST_VIEW` | `dfbl->overlay_fb` | the overlay colour, never the scene |
+| `POST_PIXEL` | region window | **after** the display transform (AgX/Filmic + CM exposure) — not invertible |
+
+So the scene-linear picture is not readable from any draw handler. The sanctioned path is an **off-screen draw**: `GPUOffScreen.draw_view3d(scene, view_layer, space, region, rv3d.view_matrix, rv3d.window_matrix, do_color_management=False)`. Two properties of that loop matter and were verified: `DRW_draw_render_loop_offscreen` constructs its `DRWContext` with a null `bContext`, and every `ED_region_draw_cb_draw` call is guarded on `evil_C` — **PA2's own draw handlers do not re-enter**; and the mode is `VIEWPORT_RENDER`, so EEVEE runs `draw_viewport_image_render` — every viewport TAA sample in one call. That is the whole cost.
+
+#### The three meters
+
+| meter | reading | stand-in | where it is wrong |
+|---|---|---|---|
+| **Sky** (default, shipped behaviour) | rect meter key | incident until a frame was metered | anything in front of the sky |
+| **Viewport** | offscreen key, fresh (< `VIEW_METER_STALE_S` = 3 s) or during a render job | Sky | Solid/Material-preview views (stale → Sky); renders re-use the last viewport reading |
+| **Incident** | `incident_ev` — the §3 illuminant on a horizontal grey card, sunny-16 at clear noon | Sky below `ILLUM_FLOOR` (moonlight; starlight is noise) | lamps and emissive surfaces (it never looks at the frame) |
+
+Every branch ends at the Sky/incident pair, so Auto never goes dead. `_STATE["auto_meter_src"]` → `scene["pa2_auto_meter_src"]` names the meter that delivered; the info box prints `Metered (viewport): EV100 …` so a fallback is visible.
+
+#### Viewport meter mechanics — `core/view_meter.py`
+
+- Runs from the watcher timer (the same block that syncs Auto at 10 Hz), never in a render job, at `_PERIOD_S` = 0.5 s, 160 px wide at the region's aspect, `RGBA32F` (the sun disc and a mirror highlight must not clip in the meter).
+- View = the first **RENDERED**-shading 3D view (the one the user judges in). None → no reading → stale → Sky.
+- Readback `texture_color.read()`, luminance, then **÷ 2^stops**: the offscreen holds render units — the world already carries the placement pre-scale and the lamps their `lamp_exposure` delta — so dividing by `2^stops` puts the composite in the meter's physical convention: the sky reads what the rect meter reads, and lamps/emission land where they appear on screen against it. Then the same `percentile_key` band law.
+- Failure latch after 8 consecutive failures (a backend that refuses the offscreen must not cost a traceback per tick).
+
+Measured (GUI smoke, Blender 5.2.1, factory scene → +2000-strength emissive cube):
+
+| step | viewport key | sky key | src | EV |
+|---|---|---|---|---|
+| Viewport, plain cube | 1.64 | — | viewport | +0.34 |
+| Viewport, emissive cube | **5.69** | 4.68 (unmoved) | viewport | −1.41 |
+| switch to Sky | | 4.68 | sky | −1.15 |
+| switch to Incident | | | incident | +1.87 |
+
+#### What the first build read wrong (same day, user: "viewport metering is either very bright or not bright enough")
+
+Bisected by dumping the meter's own offscreen image and drawing mini worlds into it. Three independent faults, each verified with a control:
+
+| fault | evidence | fix |
+|---|---|---|
+| **The draw ran the viewport compositor.** The offscreen satisfies every condition in `DRWContext::is_viewport_compositor_enabled` (v3d, rv3d, RENDERED shading, a compositing node group), so in compositor mode PA2's post stage — `PA2_POST_EXPOSURE` (the full exposure) then the tonemap — ran inside the meter's draw: the meter read its own output back and hunted. A tonemapped reading is not invertible anyway. | compositor on: key tracked EV; off: key 1.64 constant across EV | `space.shading.use_compositor = 'DISABLED'` for the one draw, restored in `finally`; its RNA update is a notifier only (`rna_SpaceView3D_shading_use_compositor_update`, no depsgraph tag). Overlays (`space.overlay.show_overlays`) likewise — the grid, axes and motion paths are bright lines, not scene light. |
+| **The rect planes had no mip chain.** GPU-direct publishes render into level 0 of the images' live textures and nothing fills the rest. The viewport never notices (Window-mapped 1:1 → level 0), but a 160 px offscreen of a 1568 px plane samples level ~3 = zeros: the sky read **black** and the "sky" the meter had seen was the overlay grid. | mini world `Image(rect) ← Window`: `Linear` black, `Closest` (no mip) mean 1.78 with the sun at 94; attributes, `Window` coords and the equirect (CPU-uploaded, mipped) all verified fine first | `view_meter._ensure_rect_mips()` before every metering draw: level L-1 → scratch (2×2 box, `texelFetch` — sampler state irrelevant) → level L via a `GPUFrameBuffer` `mip` slot; through a scratch texture so no texture is ever sampled while another level of it is the attachment. Level 0 is never touched. |
+| **Compositor mode has no sky in the film.** PA2 renders the film transparent there and composes the world from AOVs later, so the offscreen background is rgb exactly 0 — with alpha still 1 (`draw_background=False` changes nothing; no depth texture in the Python API). Key ≈ 1e-9 → EV ran to +23: the "very bright". | `rgb == 0` on 98.8 % of a sky view, alpha min/max 1/1 | `fold_view`: sky pixels = alpha < 0.5, plus (film transparent) rgb exactly zero; they take the **rect meter's own 48×27 cells** — `fold_meter_cells` now stashes `(max, Σlog2, n)` per cell in `_STATE["rect_meter_cells"]` — for their window position; object pixels stay the offscreen's. A truly black object pixel reads as sky (bias toward the sky's level; far smaller than no sky). In camera view the reading is cropped to the camera frame (`_frame_px`, the `_camera_frame_px` projection), where the rect lives. |
+
+After: compositor mode view key 4.73 vs sky key 4.64, CM mode 4.87 vs 4.73, EV settles at −1.2 without hunting, the emissive cube still lifts the key to 14.7. Unit tests: `ViewMeterFoldTests` (CM = offscreen alone; transparent film → cells; no cells → None).
+
+#### The crash that shaped the lifetime rule
+
+The first smoke run died on quit: `BPyGPUOffScreen__tp_dealloc → GPU_viewport_free → eevee::Instance::~Instance → LookdevWorld::~LookdevWorld → id_free(Image) → IMB_cache_free → MEM_CacheLimiter_unmanage` reading `0x…FFF8`. `WM_exit_ex` frees Blender's data (`BKE_blender_free`, line ~593) **before** `BPY_python_end` (~638): a `GPUOffScreen` still referenced from a module dict is deallocated during Python finalization, after the image cache is gone. The offscreen therefore must die while Blender is alive:
+
+1. **idle**: released after `_IDLE_RELEASE_S` = 5 s without a metering draw (meter switched away, mode left Auto);
+2. **file load**: `load_pre` (the EEVEE instance references the old world);
+3. **quit**: `bpy.app.handlers.exit_pre` — `BKE_CB_EVT_EXIT_PRE` fires at the top of `WM_exit_ex`, before any teardown; present in 5.2.1 (checked at runtime), registered in `__init__.register`.
+
+Both the idle path and a quit-while-metering run exit 0 with no crash file since.
+
+#### Companion fix, same day — lamps follow the placement (`core/lamp_exposure.py`)
+
+The neutrality law (§Laws) held only for what received the world's `2^stops` pre-scale: sky, synced sun lamp (`oscale` in its energy), lamps on the addon ground (`sky_lights._lamp_scale`). A user's Point/Spot/Area lamp on a **mesh** lives in raw scene units and saw only the CM compensation: Day → Night dimmed it 22 stops, and Auto Range did the same silently at dusk ("the sky stays consistent, but the lights are not"). Every non-managed lamp in an enabled scene now carries `Light.exposure = user value + (stops − (−6))` — zero at the day default — stamped on the datablock (`pa2_exposure_applied`) so only the delta's *change* is ever written and removal subtracts exactly it (Remove Atmosphere, addon disable). `sky_lights` reads the same field, so ground/air/clouds follow. Emission shaders cannot be compensated this way; the Range tooltip says so. This is also why the Viewport meter's ÷ 2^stops is exact for lamps and not only for the sky.
+
+### 3. Auto White Balance — button `world.pa2_auto_white_balance` {#auto-exposure-3-auto-white-balance-button-world-pa2autowhiteba}
+
+Physical illuminant, not grey-world (grey-world neutralises the blue sky itself — the classic landscape AWB failure):
+
+```
+E_rgb = sunRad_rgb·Ω · [ T_dir(μ₀)·max(μ₀,0)·fade(el)            direct, horizontal surface
+                       + bands_cos_SS(μ₀,h) + bands_cos_MS(μ₀,h) ]  diffuse sky (atlas rows 32 / 96, per unit sun)
+      + moon term (E_rel from pa2MoonSkyE's twin · T_dir(μ_moon) · μ_moon · mean moon-map tint)
+      + night-lights term when light pollution is on (cel_lp colour · gain)
+wp    = E_rgb / max(E_rgb)
+```
+
+Write `vs.white_balance_whitepoint = wp` (+ `use_white_balance = True`); Blender derives temperature and tint. Then set `camera_white_balance_k = "CUSTOM"` — a **new enum item** — and `_apply_white_balance` leaves the CM alone in CUSTOM (today it re-writes the temperature from the preset on every sync and would fight the button). The panel shows the derived value next to the button: `Auto (4 870 K, tint 6)`. Bonus: a manual edit of the CM temperature in CUSTOM is respected, which it is not today.
+
+Strength: full neutralisation kills a sunset's warmth; cameras keep some. Optional preference `auto_wb_strength` (0…1, default 1 = physical): `wp = illuminant^s` in linear RGB. Not in v1 unless wanted.
+
+Sanity number for the live scene (sun at 5°, clear): direct beam transmittance (0.36, 0.17, 0.03) → beam alone ≈ 2 000 K; with the horizontal sky term the mix lands ≈ 3 500–4 500 K, i.e. the "Sunset" preset's neighbourhood.
+
+### Shared core — `core/exposure_auto.py` (new, ~200 lines) {#auto-exposure-shared-core-core-exposureauto-py}
+
+- `body_discs(scene)` → list of (name, radiance, above_horizon, in_frame) from the PA2_DATA\_\* idprops + `_STATE["rect_view"]`.
+- `sun_transmittance(scene, mu0)` → factor the lamp twin out of `shadow_plane._lamp_physical` so lamp, range and WB share one Beer/KY line (the lamp keeps its behaviour bit-for-bit).
+- `sky_irradiance_bands(mu0, h)` → CPU tap of the ambient atlas (`_STATE["ambient_lut"]["tex"].read()`, cached by dep_key); zeros when unbaked.
+- `rect_stats()` → `{serial, pose, max, log_mean}` stamped by the publish block in `sky_rect.py` (stride-8 numpy over arrays it already holds; < 2 ms at 3152×1851).
+- `auto_range_stops(scene)`, `meter_key(scene)`, `illuminant_rgb(scene)`.
+
+Touch list: `sky_rect.py` publish block (+15), `celestial_math.sync_camera_exposure` (+10) and `_apply_white_balance` (CUSTOM branch), `config/properties.py` (`camera_range_auto`, `camera_range_sun_safe`, CUSTOM item), `interface/operators.py` (2 operators), `interface/panels.py` (3 rows), `__init__.py` (`render_pre` hook), CHANGELOG.
+
+### Laws to keep {#auto-exposure-laws-to-keep}
+
+- The placement is storage only: every auto write goes through `camera_world_output_stops` so the CM compensation, compositor post-exposure and lamp `oscale` stay in the same sync (the 2026-08-21 neutrality law).
+- The mirror check in `sync_camera_exposure` runs before the policy re-stamps: an auto stops change must never be read as a manual CM edit — keep the order (auto → policy → stamp).
+- Never write the planes' stats from a render job's timer; the publish block is already inside the render-safe path.
+- Bands rows are per unit sun; multiply by `sunRad·Ω`, never by the lamp energy (which carries `oscale`).
+- The neutrality law covers the scene's lamps too (2026-09-10): `lamp_exposure` writes the placement delta into `Light.exposure`; the synced sun lamp is excluded (it carries `oscale`), the delta is stamped and only its change is written — never fight a user's edit, never leave the delta behind on removal.
+- A `GPUOffScreen` never outlives Blender's data: `view_meter.release()` after idle, on `load_pre` and in `exit_pre`. Left to Python finalization it crashes on quit (§2c).
+- Only Auto Exposure reads the Viewport meter. Auto Range keeps the rect peak — the fp16 window is about what the world stores, and a lamp on a mesh is not in the world.
+
+### Open questions for the user {#auto-exposure-open-questions-for-the-user}
+
+1. Sun-safe default ON (auto moves only at night/twilight) or the frustum test as default (bigger wins in daylight sky shots, specular-clip risk on mirrors)?
+2. WB strength knob in v1, or physical only?
+3. Auto Exposure as a button only, or also a live "Auto" toggle for animations (the measurement is already per tick; it would add a smoothed EV track)?
+
+
+## KSA/KSP-style LUT atmosphere for PA2 {#lut-atmosphere}
+
+`shipped:`{: .label-fixed } Shipping · the default sky since 3.0.0-beta · 05.09.2026 · `docs/design-ksa-lut-atmosphere-2026-09.md`
+
+**In this document:** [1. Decision](#lut-atmosphere-1-decision) · [2. Why this design, not a direct port](#lut-atmosphere-2-why-this-design-not-a-direct-port) · [3. Goals and non-goals](#lut-atmosphere-3-goals-and-non-goals) · [4. Current cost and prototype evidence](#lut-atmosphere-4-current-cost-and-prototype-evidence) · [5. Resources](#lut-atmosphere-5-resources) · [6. Transmittance LUT](#lut-atmosphere-6-transmittance-lut) · [7. Multiple-scattering LUT](#lut-atmosphere-7-multiple-scattering-lut) · [8. Combined sky-view integrator](#lut-atmosphere-8-combined-sky-view-integrator) · [9. Resolve passes](#lut-atmosphere-9-resolve-passes) · [10. Aerial perspective](#lut-atmosphere-10-aerial-perspective) · [11. Cloud split-pass integration](#lut-atmosphere-11-cloud-split-pass-integration) · [12. Refraction compatibility](#lut-atmosphere-12-refraction-compatibility) · [13. Dynamic occlusion](#lut-atmosphere-13-dynamic-occlusion) · [14. Invalidation and scheduling](#lut-atmosphere-14-invalidation-and-scheduling) · [15. Blender GPU implementation](#lut-atmosphere-15-blender-gpu-implementation) · [16. Failure model](#lut-atmosphere-16-failure-model) · [17. Migration plan](#lut-atmosphere-17-migration-plan) · [18. Acceptance gates](#lut-atmosphere-18-acceptance-gates) · [19. Open decisions](#lut-atmosphere-19-open-decisions) · [20. Recommendation](#lut-atmosphere-20-recommendation) · [21. Amendments](#lut-atmosphere-21-amendments) · [22. Source anchors](#lut-atmosphere-22-source-anchors) · [23. Implementation ledger](#lut-atmosphere-23-implementation-ledger)
+
+Status (2026-09-10): MERGED AND SHIPPING — the default visible sky of
+3.0.0-beta and later (`atmosphere_lut_rect`, on for new scenes; off = the
+analytic reference march), the LUT Lighting Sky feeding the probe, the
+Reflections category, F12 and Cycles paths. Still open from §17/§19:
+the equirect's own interleaved cloud history (phase 3's "equirect cloud
+buffers", decision 6) and the 96→64 aerial depth count (decision 3).
+The limb over-read "NOT landed" below is CLOSED (2026-09-05, the
+reference was under-resolved; docs/KNOWN_ISSUES.md).
+
+Status at the 2026-09-05 review (end of day): LUT ATMOSPHERE IS THE
+DEFAULT VISIBLE SKY on `codex/ksa-lut-atmosphere-clouds` (0381b1a; option
+`atmosphere_lut_rect`, Rendering Settings > Visible Sky; off = the analytic
+reference march). Landed: the 256x64 transmittance, 192x256 sky-view and
+96x96x96 aerial producers with the shared phase-free integrator; the
+rectangle's air pass resolves the aerial planes and the sky-view atlas
+(phase applied per pixel, a night radiance scale on the 16-bit planes);
+KSA's cloud pipeline ported exactly (K1 centroid composite, K2 godray pass,
+K3 3x3 interleave with motion-vector dilation, K4 two-segment shell and
+mip rule; section 21.9); Phase 5 walked generations under refraction; the
+F12 render path; the Reflections category with a cloudless or disabled
+probe. Measured against the converged analytic reference: clear sky 0.5%
+P95, anti-solar 0.7%, twilight 4.5% (256-step reference), refraction on
+2.9%, clouds on 18 to 20% (KSA leaves the multiple-scattering coupling out
+by design). The equirect lighting sky resolves the LUT chain too since
+the same evening (LUT Lighting Sky, section 9.1: 0.47% P95 against the
+converged analytic equirect at 4.9 ms a bake; the shipped "simplified"
+march it replaces was 2.3x dark at the zenith). NOT landed: from space the
+aerial planes over-read the limb haze within two degrees
+(docs/KNOWN_ISSUES.md). Section 17 carries the per-phase status,
+section 18 the measured gates, section 23 the ledger and section 23.1 the
+compile-time findings.
+
+Amended 2026-09-05 after review: section 21. The body keeps the original
+proposal text; a bracketed pointer marks each statement section 21
+supersedes.
+
+### 1. Decision {#lut-atmosphere-1-decision}
+
+PA2 should adopt the *shape* of KSA's Hillaire pipeline while keeping PA2's
+optical model:
+
+1. bake clear-air transmittance over `(radius, ray zenith)`;
+2. bake the all-orders multiple-scattering closure over `(altitude, sun
+   zenith)`;
+
+3. integrate single and multiple scattering together into a small,
+   horizon-focused sky-view LUT;
+
+4. integrate finite-distance haze into an aerial-perspective LUT by marching
+   each angular ray once and storing every intermediate depth slice;
+
+5. keep PA2's cloud march as a separate pass which produces cloud radiance,
+   transmittance and representative distance, then place that result into the
+   clear atmosphere with aerial-LUT samples;
+
+6. make the equirectangular and camera-rectangle passes resolve those LUTs
+   instead of marching the atmosphere again;
+
+7. keep sharp celestials, ground, scene geometry, eclipses, cloud density and
+   dynamic shadows outside the smooth clear-air LUT.
+
+The decisive optimization is items 3--5. A transmittance LUT by itself is not
+the performance architecture.
+
+```text
+optical parameters
+       |
+       +--> transmittance 256x64 --------+
+       |                                  |
+       +--> Psi MS 64x64 -----------------+--> sky view 192x256 ----+
+                                          |                          |
+observer + sun + moon --------------------+--> aerial 96x96x96 -----+--+
+                                          |                          |  |
+cloud density + shadow volumes ---------> cloud march/temporal L,T,d   |
+                                                                     |
+dynamic occlusion residual ------------------------------------------+
+                                                                     v
+                                                        atmosphere/cloud merge
+                                                           |              |
+                                                           +--> equirect resolve
+                                                           +--> camera rect resolve
+
+celestials + ground --------------------------------> full-resolution B plane
+```
+
+### 2. Why this design, not a direct port {#lut-atmosphere-2-why-this-design-not-a-direct-port}
+
+KSA's supplied shaders implement Hillaire's production model:
+
+- `AtmosphereLuts.glsl`: Bruneton transmittance mapping and a horizon-focused
+    sky mapping;
+
+- `AtmosphereFunctions.glsl`: one forward march which accumulates view
+    transmittance and samples transmittance/MS LUTs;
+
+- `MultipleScatteringLut.comp`: 64 directional rays per texel, a shared-memory
+    reduction and the geometric-series `1/(1-f_ms)` closure;
+
+- `SkyLut.comp`: a 50-step clear-air march per angular texel;
+- `AerialPerspectiveLut.comp`: one march per XY direction which stores all Z
+    slices;
+
+- `Atmosphere.comp`: normally two sky texture reads, or an aerial lookup, at
+    display resolution;
+
+- `Godrays.comp`: a low-resolution, temporally accumulated occlusion residual
+    which is subtracted from the clear LUT result;
+
+- `RaymarchCloud.comp` + `UpscaleCloud.comp`: a separate low-resolution cloud
+    march and full-resolution temporal reconstruction. The cloud march samples
+    transmittance, aerial, MS/ambient and shadow-volume resources, evaluates
+    expensive atmospheric placement once at its transmittance-weighted cloud
+    centroid, and publishes premultiplied cloud color plus transmittance.
+
+The accompanying KSA research records 256x64 transmittance, 192x256 sky-view
+and 96x96x96 aerial LUTs. KSA rebuilds the LUT chain every frame; its reported
+RTX 2080 Super timings at 1440p were about 0.01 ms transmittance, 0.05 ms sky,
+0.05 ms aerial and 0.2--0.3 ms final sampling.
+
+PA2 cannot copy the shader literally. PA2 also carries an aerosol boundary
+layer, spectral ozone, OPAC aerosol phase, airglow, moonlight, eclipses,
+ground ambient, optional refraction, a world-lighting equirect and a separate
+camera fovea. Those features determine the storage, precision and cache keys
+below.
+
+### 3. Goals and non-goals {#lut-atmosphere-3-goals-and-non-goals}
+
+#### Goals
+
+- The normal equirect and camera-rectangle shaders contain **no atmosphere
+    integration loop**.
+
+- Camera rotation resolves the existing LUT without rebaking it.
+- Sun motion or observer-altitude changes rebuild only the small camera-
+    dependent LUTs.
+
+- Atmospheric parameter edits rebuild the complete dependency chain safely.
+- Day, twilight, space limb and deep night retain PA2's current optical model.
+- The same `S + T * B` law remains valid for EEVEE, Cycles publication,
+    reflections and the compositor.
+
+- The analytic march remains available as the reference and automatic
+    fallback until the LUT path has shipped successfully.
+
+- Normal-tier atmosphere work should become nearly independent of output
+    resolution.
+
+- The existing rectangle cloud split, interleave and temporal history remain
+    independent of the atmosphere LUT cache and keep their own update cadence.
+
+- The same cloud/atmosphere ordering equation works for the camera rectangle,
+    the equirectangular lighting sky and finite scene depth.
+
+#### Non-goals
+
+- No change to cloud density, cloud phase, light marching, noise or temporal
+    reconstruction in the atmosphere prototype.
+
+- No cloud density, cloud lighting or cloud temporal resolve inside any
+    clear-air LUT builder. This design does define the split-pass interface,
+    dependency graph and composition law they must use.
+
+- No removal of the analytic reference during the first release.
+- No attempt to reproduce KSA's simplified optical coefficients.
+- No CPU readback in the interactive LUT chain.
+
+### 4. Current cost and prototype evidence {#lut-atmosphere-4-current-cost-and-prototype-evidence}
+
+With the fovea disabled, PA2's Normal equirect is 2048x1024. The property
+defaults are 8 single-scattering and 8 multiple-scattering view samples, so a
+single full bake starts at roughly 33.6 million atmosphere iterations before
+ground, shadow and feature overhead. The camera rectangle may repeat much of
+that work at view resolution.
+
+The 2026-09-04 transmittance prototypes showed why the complete architecture
+matters:
+
+| variant | warm Blender 5.2 result | conclusion |
+|---|---:|---|
+| analytic reference | 39.9 ms in the final validation run | baseline |
+| LUT sun + endpoint-ratio view LUT | 24.3 ms vs 17.3 ms reference in its repeated run | dependent view texture reads made it about 40% slower |
+| LUT sun + forward Simpson view column | 38.2 ms vs 39.9 ms reference | approximately break-even; correct foundation, not the large win |
+
+The hybrid's 95th-percentile relative scatter error was 0.83%; only 0.005%
+of active channel samples exceeded 1%. Transmittance error was negligible.
+The evidence supports KSA's choice: use the transmittance LUT for the sun path,
+accumulate the view path forward, and amortize the *completed radiance* in a
+sky-view LUT.
+
+### 5. Resources {#lut-atmosphere-5-resources}
+
+Initial fixed dimensions deliberately match the known KSA layout. Quality
+scaling should be added only after image-error and timing sweeps establish
+where it helps.
+
+| resource | initial size / format | contents | dependency class |
+|---|---|---|---|
+| `transmittance` | 256x64 RGBA16F | RGB sample-to-top transmittance | optical-static |
+| `psi_ms` | 64x64 RGBA16F | RGB all-orders isotropic source, A=`f_ms` diagnostic | optical-static |
+| `sky_scatter` | 192x256 RGBA32F | RGB integrated radiance; A reserved | camera-light |
+| `sky_transmit` | 192x256 RGBA16F | RGB view transmittance; A validity/debug | camera-light |
+| `aerial_scatter` | 96x96x96 RGBA32F | RGB finite-distance radiance | camera-light |
+| `aerial_transmit` | 96x96x96 RGBA16F | RGB finite-distance transmittance | camera-light |
+| `aerial_range` | 96x96 R32F | ray range used by the Z mapping | camera-light |
+
+The atmosphere resources do not store clouds. Existing rectangle cloud
+history stays projection-local:
+
+| cloud resource | format | contract |
+|---|---|---|
+| `cloud_L_d` | RGBA16F | RGB premultiplied intrinsic cloud radiance, A representative distance in km |
+| `cloud_T` | RGBA16F | RGB cloud transmittance; A reserved |
+| `cloud_history_aux` | existing A/history format | motion, sample count and centroid/depth data owned by the temporal cloud resolve |
+
+`cloud_L_d` and `cloud_T` are not LUT-generation outputs and do not count
+toward the warm atmosphere-LUT memory gate. Their semantic contract must be
+identical for fragment and compute paths.
+
+Why PA2 initially keeps scatter at 32-bit: existing testing found deep
+twilight radiance can underflow RGBA16F. Transmittance is bounded and remains
+16-bit. The aerial pair costs about 21 MiB at 96 cubed; sky + transmittance +
+Psi add about 1.3 MiB. A later log-radiance or exposure-relative encoding may
+halve this, but it is not part of the correctness prototype.
+
+If Blender's backend cannot expose a writable 3D image consistently, use a
+96x(96\*96) or tiled 2D texture. The algorithmic invariant is one invocation
+per angular coordinate writing all depth slices, not the physical texture
+shape. [Amended 2026-09-05: writable `FLOAT_3D` image stores are proven on
+Vulkan by the shadow volume; see section 21.6.]
+
+### 6. Transmittance LUT {#lut-atmosphere-6-transmittance-lut}
+
+Retain the implemented Bruneton/Hillaire `(r, mu)` mapping and half-texel
+reciprocity. It already supports PA2's spherical geometry.
+
+The stored quantity is full RGB extinction from a point to the top boundary:
+
+```text
+T_top(r, mu) = exp[-tau_R - tau_M - tau_O3]
+```
+
+PA2 may continue using analytic Rayleigh, aerosol-shell and ozone integrals
+when generating each texel. KSA's 50-step numerical bake is simpler, but the
+LUT is tiny and changes rarely in Blender. Generation cost is less important
+than agreement with the analytic reference.
+
+Rules:
+
+- the sampler exists only in shaders which explicitly declare it;
+- every auxiliary builder owns a complete, explicit feature mask;
+- rays intersecting the solid planet return zero direct-sun transmittance;
+- top radius is stored or derived by one shared helper in producer and
+    consumer;
+
+- the LUT is invalidated by radius, Rayleigh/aerosol/ozone parameters,
+    component toggles and aerosol-bump parameters, never by camera or sun pose.
+
+### 7. Multiple-scattering LUT {#lut-atmosphere-7-multiple-scattering-lut}
+
+PA2 already owns the core Hillaire solution in the 64x64 Psi band of the
+ambient atlas. The new pipeline should promote that band to a dedicated
+`psi_ms` resource rather than copying it out of a multi-purpose 64x256 atlas.
+The cloud/ground ambient atlas can continue consuming it. [Amended
+2026-09-05: not promoted, builders bind the atlas; see section 21.4.]
+
+Axes:
+
+```text
+x = sunCosZenith * 0.5 + 0.5
+y = nonlinear altitude over [Rground, Rtop]
+```
+
+Each texel uses full-sphere directional quadrature, integrates second-order
+isotropic luminance and the re-scatter fraction, then applies:
+
+```text
+Psi = L_second / max(1 - f_ms, epsilon)
+```
+
+PA2's existing Fibonacci quadrature should remain; it was introduced to
+remove the striping and forward-lobe bias of an 8x8 grid. Ground-albedo bounce
+remains part of the closure. The resource depends on optical parameters and
+ground albedo, but not observer position or the actual sun direction because
+sun zenith is an axis.
+
+### 8. Combined sky-view integrator {#lut-atmosphere-8-combined-sky-view-integrator}
+
+Create a new clear-air integrator; do not call the existing
+`atmosphere_clouds()` function from the LUT builder. Its single loop evaluates
+both SS and MS at each sample. [Amended 2026-09-05: the stored quantities
+are phase-free integrals, section 21.2; one integrator serves both LUTs,
+section 21.5.]
+
+For a step of length `ds` at the representative position:
+
+```text
+rhoR, rhoM, rhoO3 = local density profiles
+sigma_t           = beta_eR*rhoR + beta_eM*rhoM + sigmaO3*rhoO3
+T_step            = exp(-sigma_t*ds)
+W                 = T_view * (1 - T_step) / max(sigma_t, epsilon)
+
+T_sun = sample transmittance(r, dot(up, sunDir))
+L_ss += W * T_sun * shadow_smooth
+        * (beta_sR*rhoR*phaseR + beta_sM*rhoM*phaseM)
+
+Psi  = sample psi_ms(altitude, sunCosZenith)
+L_ms += W * Psi * (beta_sR*rhoR + beta_sM*rhoM)
+
+L_emission += W * airglow_emission
+T_view     *= T_step
+```
+
+Use a stable `expm1`-style limit so `W -> T_view*ds` when extinction tends to
+zero. Compute phases once per ray when refraction is off. With deterministic
+refraction, update the phase from the bent direction only at the same sparse
+stations used by the reference path.
+
+Suggested sample ladder for the small LUT, subject to measurement:
+
+| tier | sky steps |
+|---|---:|
+| Potato | 16 |
+| Low | 24 |
+| Normal | 32 |
+| High | 48 |
+| NASA | 64 |
+
+These counts are intentionally higher than the current per-output-pixel
+defaults because 49,152 sky texels are far cheaper than millions of output
+pixels. [Amended 2026-09-05: one fixed count for every tier; see section
+21.5.]
+
+#### 8.1 Angular mapping
+
+Adopt KSA's modified Hillaire mapping:
+
+- X is full `[-pi, pi]` azimuth around the local zenith, with zero facing the
+    projected sun;
+
+- Y is split at the geometric horizon;
+- both halves square the inverse coordinate, concentrating rows at the limb;
+- outside the atmosphere, restrict the upper range to the visible atmosphere
+    cone;
+
+- apply the same half-texel transform in both directions.
+
+At the zenith and when the sun is parallel to the zenith, cross products are
+ill-conditioned. Fall back to PA2's observer north/east basis, not an arbitrary
+world axis, so the LUT does not spin between frames.
+
+The resolve must never bilinearly blend across the ground/sky horizon. Compute
+the ground-intersection class from the exact output ray and clamp Y to the
+matching half by at least half a texel. This follows KSA's aerial horizon fix.
+
+#### 8.2 Night and secondary lights
+
+The mapping covers the complete sphere, so broad moon-scattered light,
+airglow and light-pollution emission can be baked despite the coordinate frame
+being sun-relative. Sharp stars, the moon disc, sun disc and planets remain in
+the full-resolution background plane.
+
+The first milestone may include solar SS, Psi MS and airglow, then add lunar
+SS as a separate acceptance item. It must not silently remove the existing
+night sky.
+
+### 9. Resolve passes {#lut-atmosphere-9-resolve-passes}
+
+Both output domains consume the same sky LUT. [Amended 2026-09-05: the same
+builder, but two generations when refraction is on; see section 21.3.]
+
+#### 9.1 Equirectangular lighting sky
+
+[Implemented 2026-09-05 (LUT Lighting Sky, `probe_lut`, on by default):
+the equirect build takes the LUT (`_build_shader(lut=)` and the draft
+compute twin), sky rays read the sky-view atlas, ground rays the aerial
+planes, and the KSA cloud arm runs inline at probe resolution with the
+centroid composite; no godray pass, no object shadows, no interleave; the
+render bake takes the same path with the arm per sample. Measured
+(`scripts/probe_equirect_lut.py`, 1024x512, sun 20 degrees, clear):
+0.47% P95 against the converged analytic equirect (64 view + 256 MS
+steps; sky half 0.62%, transmittance 0.29%) at 4.9 ms a bake against that
+reference's 36 ms and the shipped "simplified" march's 4.3 ms. The
+simplified march it replaces sat 2.3x dark at the zenith (the 8 + 8
+estimator verdict of 21.5, halved again), so world lighting brightens
+where it was wrong. With clouds both cost about 20 ms: the inline cloud
+arm is the bake. Cold compile of the variant 5 to 18 s (the fallback
+march is still compiled in), 1.5 s with Reflect Clouds off.]
+
+For every equirect direction:
+
+1. reconstruct the world ray;
+2. map it into the sky-view LUT;
+3. fetch clear-air `S_D` and `T_D` to the ground hit or infinity;
+4. when clouds are enabled, consume the equirect cloud pass and merge it by
+   the depth-resolved equation in section 11 [Amended 2026-09-05: `S_d, T_d`
+   come from the sky-mapped aerial; see section 21.1];
+
+5. compute cheap ground-only lanes (`INDIRECT`, direct-sun shadow and ground
+   distance) from the transmittance and ambient LUTs;
+
+6. compose full-resolution ground/celestials with `S + T*B`;
+7. publish the one combined lighting texture as today.
+
+This resolve is output-resolution work, but contains no atmosphere loop.
+The first parity implementation may run the equirect cloud pass at its full
+target resolution and existing low bake cadence. Its projection differs from
+the rectangle, but it uses the same `L,T,d` contract and cloud-march library.
+Temporal/interleaved equirect clouds are a later optimization, not a reason to
+put clouds back into the atmosphere march.
+
+#### 9.2 Camera rectangle
+
+The rectangle performs the same lookup using the camera ray. For sky pixels it
+uses the sky-view pair. For finite scene depth it uses the aerial pair. It then
+consumes the existing temporally reconstructed cloud pair and merges it at the
+stored representative depth. Ground, celestials and the existing AOV rules
+remain full resolution.
+
+Camera rotation changes only this resolve. Camera translation which changes
+observer altitude or the local zenith invalidates the camera-light LUTs.
+
+#### 9.3 Ground support planes
+
+`FragIndirect` and `FragShadow` should stop being by-products of the expensive
+sky march:
+
+- ground ambient: one lookup in the existing measured ambient atlas;
+- clear-air direct shadow: one transmittance lookup at the ground point;
+- ground distance and hit mask: analytic or refracted ray geometry;
+- cloud opacity affects a ground/geometry target only when its validated
+    front or centroid distance is in front of that target;
+
+- cloud shadows on the ground remain in the existing receiver/shadow path.
+
+This makes their cost independent of sky sample count and prepares those MRTs
+for later removal or lower precision.
+
+### 10. Aerial perspective {#lut-atmosphere-10-aerial-perspective}
+
+[Amended 2026-09-05: the XY domain is the sky-view angular mapping of
+section 8.1, not the camera frustum; see section 21.1.]
+
+The current parked PA2 atlas evaluates the complete atmosphere/cloud composite
+separately for every slice. That repeats nearly all work and should not be
+reactivated as-is.
+
+The replacement dispatches one invocation per XY angular texel. Its loop has
+exactly `depthSlices` iterations and writes accumulated `S` and `T` after each
+iteration. Thus 96 slices cost 96 steps, not 96 independently truncated
+marches.
+
+Use KSA's depth mapping:
+
+```text
+inside atmosphere: distance = range * z^2
+outside atmosphere: distance = range * z
+```
+
+Store the exact per-direction range in `aerial_range`. Runtime sampling uses
+bicubic XY and linear Z; do not use tricubic filtering. Clamp bicubic samples
+to the same side of the horizon. Before the first slice, interpolate from
+`S=0, T=1`.
+
+The initial 96 cubed target is a parity target, not a permanent minimum. A
+48/64-slice low tier should be tested after the correct one-march/many-write
+implementation exists.
+
+### 11. Cloud split-pass integration {#lut-atmosphere-11-cloud-split-pass-integration}
+
+This is part of the atmosphere architecture even though cloud rendering is a
+separate project. The contract follows KSA's useful separation:
+
+1. clear atmosphere is generated without cloud density;
+2. clouds march in their own projection-local, low-resolution pass;
+3. the cloud pass consumes atmosphere lighting resources rather than calling
+   the sky-view builder;
+
+4. a transmittance-weighted cloud centroid defers atmosphere placement,
+   motion and other expensive position-dependent work to one evaluation;
+
+5. cloud history is reconstructed independently;
+6. the final resolve orders reconstructed clouds inside the clear atmosphere.
+
+PA2 already implements the rectangle form of steps 2, 4 and 5 in
+`sky_driver.glsl` and `sky_rect.py`: the dedicated pass publishes cloud
+radiance, transmittance and centroid/front distance, and the air pass consumes
+those textures. The LUT migration must preserve that path, not replace it
+with a combined atmosphere/cloud shader.
+
+#### 11.1 Buffer semantics
+
+Use these unambiguous quantities for one effective cloud layer:
+
+```text
+L_c = intrinsic premultiplied cloud radiance before view-air placement
+T_c = cloud transmittance
+d   = transmittance-weighted representative cloud distance
+f   = conservative cloud-front distance, when available (cloud_T.a, 21.7)
+```
+
+The temporal history stores `L_c`, `T_c`, `d` and its reprojection metadata.
+It must not store the final atmosphere/cloud composite. This keeps the clear
+atmosphere fresh while a 3x3 cloud history is deliberately several rounds old
+and avoids feeding smooth atmospheric gradients through the cloud history
+clamp.
+
+KSA applies aerial perspective once at the weighted centroid inside its cloud
+pass. PA2 should perform the equivalent operation immediately *after* cloud
+temporal reconstruction. This is algebraically the same split, but better
+matches PA2's existing raw `uCloudL/uCloudT` history and lets one fresh
+atmosphere generation serve old and new cloud samples consistently.
+
+#### 11.2 Ordered composition
+
+For a target at distance `D` (scene depth, ground, or infinity), fetch:
+
+```text
+(S_D, T_D) = clear atmosphere from camera to D
+(S_d, T_d) = clear atmosphere from camera to cloud centroid d
+```
+
+When the cloud is in front of the target, compose without reconstructing or
+dividing by the behind-cloud segment:
+
+```text
+C_cloud_at_eye = T_d * L_c + (1 - T_c) * S_d
+S_out          = C_cloud_at_eye + T_c * S_D
+               = T_d*L_c + (1-T_c)*S_d + T_c*S_D
+T_out          = T_c * T_D
+```
+
+This is the depth-resolved form of KSA's transparent cloud composite and the
+same factorization already used by PA2's analytic split path. It correctly
+retains clear-air radiance in front of an opaque cloud, attenuates the air
+behind it, and attenuates the final background by both media. It also avoids
+the numerically unsafe `(S_D-S_d)/T_d` division near an opaque horizon.
+
+If `f >= D`, or the cloud interval does not overlap the target ray, use the
+clear result unchanged. Use `f` for the conservative visibility decision and
+`d` for atmosphere placement/reprojection. A single centroid is an accepted
+approximation for overlapping layers; if horizon-separated layers visibly
+misorder, extend the contract to near/far `L,T,d` slices before considering a
+general per-pixel layer list.
+
+#### 11.3 Cloud inputs from the LUT system
+
+The cloud pass may sample, but never write or invalidate:
+
+- `transmittance` for sun/moon-to-cloud extinction;
+- `psi_ms` and the ambient LUT for broad skylight;
+- `aerial_scatter`, `aerial_transmit` and `aerial_range` only in the post-
+    temporal placement/merge stage;
+
+- cloud shadow and ambient volumes for local lighting and long-range light
+    extinction.
+
+The sky-view LUT is not a cloud-lighting lookup. It is observer/view
+directional radiance and would couple cloud lighting to camera orientation.
+Cloud ambient continues to use its dedicated measured/angular resources.
+
+#### 11.4 Pass order and cadence
+
+```text
+dirty physical state:
+    transmittance -> psi/ambient -> sky + aerial
+
+each cloud update:
+    shadow/ambient volumes -> low-res cloud L,T,d -> cloud temporal resolve
+
+each output resolve:
+    clear S_D,T_D + clear S_d,T_d
+    -> apply dynamic SS residuals at D and d
+    -> cloud/atmosphere ordered merge
+    -> ground/celestial background: S_out + T_out*B
+```
+
+Atmosphere and cloud generations are independently publishable. A cloud
+history reset does not discard valid atmosphere LUTs; a new atmosphere
+generation does not erase cloud history. The merge records both generation
+IDs so it never samples partially published resources. When an atmosphere
+build fails, the cloud pass uses the last good generation or the analytic
+placement fallback along with the rest of the renderer.
+
+#### 11.5 Dynamic cloud shadows and godrays
+
+KSA keeps cloud density out of the sky LUT and represents its effect on air as
+a separate, low-resolution temporally accumulated *shadowed single-scatter
+residual*. PA2 should retain this model. Let `G_D` and `G_d` be removed clear
+single scattering to the target and cloud centroid. Before the ordered merge:
+
+```text
+S_D' = max(S_D - G_D, 0)
+S_d' = max(S_d - G_d, 0)
+```
+
+Use `S_D'` and `S_d'` in the equation above. Multiple scattering is not
+subtracted, so shafts do not turn unnaturally black. Cloud self-lighting still
+uses the cloud shadow volume. The first LUT milestone can set both residuals
+to zero, but the resource slots, depth convention and merge API must exist so
+godrays can be added without changing the base LUT formats. [Implemented
+2026-09-05 as KSA's godray pass (21.9 K2): scene casters and the cloud
+shadow volume, half resolution, its own history; the 5% aerosol damp KSA
+applies is removed, see 23.1.]
+
+### 12. Refraction compatibility {#lut-atmosphere-12-refraction-compatibility}
+
+[Amended 2026-09-05: superseded by section 21.3. No `ray_geometry` table;
+the builders run the shared refraction walk per texel, and the sky LUT is
+baked in two generations when refraction is on. The shimmer paragraph
+stands.]
+
+Deterministic atmospheric refraction must be part of the ray used to generate
+sky and aerial LUT texels; otherwise the horizon color, ground hit and body
+positions disagree.
+
+Spherical refraction geometry depends on observer altitude and apparent
+zenith, not azimuth. Add a camera-height-dependent 1D `ray_geometry` table
+which stores, per apparent zenith:
+
+- accumulated bend / exit direction parameters;
+- ground-hit distance and angular travel;
+- atmosphere entry/exit distance;
+- a validity/fold classification for mirage cases.
+
+The sky/aerial builders and the full-resolution background/ground resolve read
+the same table. This keeps sharp celestials full resolution while sharing the
+same bent path used by atmospheric radiance. Apparent-ray to physical-path is
+single-valued even when the inverse true-angle mapping folds in a mirage.
+
+Shimmer is deliberately not baked into the low-resolution LUT. Apply its small
+direction perturbation when mapping the output ray and when placing
+celestials. Large shimmer amplitudes must trigger a wider reconstruction
+filter or fall back to the reference path.
+
+Until `ray_geometry` passes its alignment tests, enabling the LUT renderer with
+ray-marched refraction should select the analytic reference automatically.
+
+### 13. Dynamic occlusion {#lut-atmosphere-13-dynamic-occlusion}
+
+The clear LUT contains the planet's smooth self-shadow and celestial penumbra
+which are representable at its resolution. High-frequency mesh/cloud shadows
+must not force the base atmosphere back into a full-resolution march.
+
+Residual pass (implemented 2026-09-05: `godray_lib.glsl`,
+`godray_driver.glsl`):
+
+```text
+S_final = max(S_clear - S_occluded_single, 0)
+```
+
+Only single scattering is subtracted; multiple scattering continues lighting
+the shadowed volume. The residual may use the existing caster map and cloud
+shadow volume at reduced resolution with temporal history. Section 11.5
+defines the two depth samples needed for correct ordering with the split cloud
+pass. The residual implementation belongs after the clear-air migration.
+
+Eclipses with a large, smooth penumbra may be baked into the sky LUT. Small or
+moving occluders use the residual path. The boundary is selected by projected
+angular frequency, not by object type.
+
+### 14. Invalidation and scheduling {#lut-atmosphere-14-invalidation-and-scheduling}
+
+Use explicit generations rather than one monolithic source key.
+
+| generation | invalidated by | does not depend on |
+|---|---|---|
+| optical | radii, scale heights, beta coefficients, aerosol bump, ozone, component toggles | camera, sun pose, exposure |
+| MS | optical generation, ground albedo, MS controls | camera, actual sun direction |
+| ray geometry (removed, section 21.3) | observer altitude, refraction profile/toggles | sun, atmosphere radiance |
+| camera-light | optical/MS/ray generation, observer position, sun/moon state, emission parameters | camera orientation, output resolution |
+| cloud lighting | cloud parameters, cloud animation, optical/MS generation, sun/moon state, cloud shadow/ambient volumes | atmosphere output resolution |
+| cloud history | cloud-lighting generation, projection/camera discontinuity, history dimensions | sky/aerial rebuild when raw history semantics are retained |
+| resolve | camera matrices, output dimensions, background/ground state, exposure, published atmosphere/cloud generations | optical or cloud integration |
+
+Unlike KSA, PA2 does not need to rebuild everything every frame. A stationary
+Blender camera with a rotating view reuses all physical LUTs. Scene animation
+may rebuild the small camera-light generation each frame.
+
+Physical build and per-view order:
+
+```text
+transmittance -> psi_ms -> ray_geometry -> sky_view -> aerial
+                                       cloud volumes -> cloud march/history
+atmosphere generation + cloud generation ------------> ordered resolve
+```
+
+Only rebuild dirty suffixes. Render into staging resources and publish/swap a
+generation only after every required pass succeeds. Never expose a mixture of
+old Psi and new sky radiance.
+
+### 15. Blender GPU implementation {#lut-atmosphere-15-blender-gpu-implementation}
+
+Recommended ownership:
+
+```text
+_STATE["atmosphere_luts"] = {
+    "generation_keys": ...,
+    "transmittance": ...,
+    "psi_ms": ...,
+    "ray_geometry": ...,
+    "sky": ...,
+    "aerial": ...,
+    "last_good": ...,
+}
+```
+
+One owner makes purge and context loss atomic. It avoids adding more unrelated
+top-level keys to the existing hand-maintained GPU reset list.
+
+Cloud history remains owned by the rectangle/equirect projection cache, not
+by `atmosphere_luts`. The resolve receives an immutable view of one complete
+atmosphere generation and one complete cloud-history generation.
+
+Shader layout:
+
+- `atmosphere_lut_integrator.glsl`: clear-air combined SS/MS march;
+- `sky_view_lut_driver.glsl`: angular reconstruction and two outputs;
+- `aerial_lut_driver.glsl`: angular reconstruction, depth loop and stores;
+- `atmosphere_lut_resolve.glsl`: equirect/rect lookup and support lanes;
+- `atmosphere_cloud_merge_lib.glsl`: shared equation, front-depth test and
+    optional godray-residual inputs for fragment and compute resolves;
+
+- retain `sky_driver.glsl` as the analytic reference during migration.
+
+Each builder declares a minimal sampler set and constructs its compile defines
+from a local allowlist. Do not derive auxiliary builders by taking the main
+shader's global toggle tuple and trying to pin individual entries afterward.
+That pattern caused the transmittance sampler to leak into the ambient shader.
+
+Use compute shaders and GPU-only scratch textures where supported. Keep the
+existing fragment fallback for backends where writable image formats are not
+reliable. Publication to Blender images happens after resolve, not between LUT
+passes.
+
+### 16. Failure model {#lut-atmosphere-16-failure-model}
+
+Priority order on a failed build:
+
+1. keep and use the last complete LUT generation;
+2. if no complete generation exists, compile/use the analytic reference;
+3. only use black scatter/unit transmittance for an explicitly disabled
+   atmosphere.
+
+A failed ambient or MS bake must not replace valid lighting with zero. Record
+the failed stage and source key, log it once, and retry only when that key or
+the GPU context changes.
+
+Modes exposed during development:
+
+- `REFERENCE_MARCH`: current analytic renderer;
+- `LUT_EXPERIMENTAL`: complete LUT path;
+- `AUTO`: LUT when a valid generation exists, otherwise reference.
+
+Do not expose individual internal LUT toggles in normal user modes. Scientist
+mode may show them for A/B validation.
+
+### 17. Migration plan {#lut-atmosphere-17-migration-plan}
+
+Status per phase (review 2026-09-05):
+
+| Phase | State | Where |
+|---|---|---|
+| 0 harness | done; the three prototype toggles retired (5176cab) | `probe_lut_parity`, `_diag`, `_ms_trend`, `_rect`, `probe_viewport_shot` |
+| 1 foundations | done: owned `atmosphere_luts`, last-good generations, keyed rebuilds | `core/sky_luts.py` |
+| 2 sky-view | done, go: 0.4% P95 vs the 256-MS-step march, 2 to 4x on GPU time | dbecafc, 21.5 |
+| 3 aerial + cloud contract | aerial builder done; the merge helper superseded by KSA's centroid composite (K1); equirect cloud buffers NOT done | 466274b, 21.9 |
+| 4 production | rect done and DEFAULT (0381b1a); equirect done the same evening (LUT Lighting Sky, on by default) | 9.1, 23 |
+| 5 refraction | done: walked generations, the gate removed, 2.9% residual | 11792e8, 21.9 |
+| 6 dynamic residuals | done as KSA's godray pass (scene casters + cloud shadow volume); the eclipse penumbra stays in the base generation | 466274b, 856ec40 |
+| 7 default switch | rect default on; verified on Vulkan / RTX 4080 only; the analytic march stays as the option-off referee | 0381b1a |
+
+#### Phase 0 -- measurement harness
+
+- Extend the existing Blender 5.2 probe to capture reference S/T images,
+    per-pass GPU timings and cache-rebuild timings.
+
+- Alternate variant order and report medians to control warm-up and clock
+    variance.
+
+- Capture every acceptance altitude/sun condition before changing the main
+    renderer.
+
+- Capture three matched cloud cases from the existing split path: clear sky,
+    one opaque layer and two separated/horizon-grazing layers. Save raw
+    `L_c,T_c,d`, final S/T and timing independently.
+
+- [Amended 2026-09-05: report atmosphere GPU time apart from the image
+    publish and measure the clouds-on share; see section 21.5.]
+
+#### Phase 1 -- foundations
+
+- Keep the transmittance LUT experimental.
+- Add mapping reciprocity, horizon, finite-value and component-toggle tests.
+- Extract the Psi band into a dedicated resource without changing its math.
+    [Amended 2026-09-05: dropped; see section 21.4.]
+
+- Introduce the owned `atmosphere_luts` state and last-good generation logic.
+
+#### Phase 2 -- sky-view prototype
+
+- Implement the clear-air combined SS/MS integrator.
+- Bake 192x256 S/T with clouds and dynamic casters compiled out.
+- Add a diagnostic equirect resolve beside, not instead of, the reference.
+- Compare day, terminator, night and space-limb images.
+
+This phase is the go/no-go point. Do not continue if it does not deliver a
+clear speedup over the full-output march.
+
+#### Phase 3 -- aerial perspective and cloud contract
+
+- Replace the parked aerial atlas with the one-march/many-slice builder.
+- Add the shared cloud/atmosphere merge helper and validate its algebra using
+    synthetic constant `L_c,T_c,d` buffers.
+
+- Feed the existing rectangle split-cloud history into the diagnostic LUT
+    resolve; do not change the cloud march or history algorithm.
+
+- Add full-resolution equirect split-cloud buffers for parity with the camera
+    path while retaining the analytic inline renderer as reference.
+
+- Validate cloud-before-ground, cloud-before-space-background and
+    geometry-before-cloud ordering.
+
+#### Phase 4 -- production equirect and rectangle
+
+- Route both output domains through the shared sky/aerial LUTs and cloud
+    merge.
+
+- Rebuild cheap ground ambient/shadow/distance lanes independently.
+- Preserve exact full-resolution celestials, ground composition and existing
+    cloud temporal cadence.
+
+- Add `AUTO` fallback, generation mismatch and context-loss tests.
+
+#### Phase 5 -- refraction parity
+
+- Implement/share the 1D ray-geometry table. [Amended 2026-09-05: no table;
+    walked LUT generations instead, section 21.3.]
+
+- Validate atmosphere, ground and celestial alignment from ground and orbit.
+- Enable LUT + refraction in `AUTO` only after parity.
+
+#### Phase 6 -- dynamic residuals
+
+- Move mesh/eclipse high-frequency occlusion to the subtractive residual.
+- Feed the cloud shadow volume into `G_D/G_d` and validate shafts both in
+    front of and behind opaque clouds.
+
+- Keep cloud density/lighting improvements in the separate cloud branch.
+
+#### Phase 7 -- default switch
+
+- Make `AUTO` the default after the acceptance matrix passes on Vulkan,
+    DirectX/Metal paths available through Blender, and at least one integrated
+    GPU.
+
+- Keep `REFERENCE_MARCH` for one release as a regression referee.
+
+### 18. Acceptance gates {#lut-atmosphere-18-acceptance-gates}
+
+Measured so far (2026-09-05; the reference is the converged analytic march,
+64 view + 256 MS steps, 256 view steps at twilight):
+
+- Daylight sky pixels: 0.50% P95 sun-facing, 0.73% anti-solar (the 1% gate
+    is met). Transmittance MAE 6e-4, anti-solar 0.8% (the 5e-4 P99 gate is
+    not met as written; the MAE sits at it).
+
+- Twilight (sun -8 degrees): 4.5% P95, centre column within 4%.
+- Night (moon 40 degrees, the factory lamp removed): 1% at the horizon.
+- Refraction on: 2.9% P95 (the LUT 1 to 3% brighter, more in blue).
+- Clouds on: sky pixels 18 to 20%, opaque cloud 16 to 18%, clear air
+    between clouds 24% sun-facing and 6% anti-solar; centre-column cloud
+    rows within 4%. Expected: KSA occludes single scattering only.
+
+- Space: the sunlit limb haze is present again (856ec40) but over-reads
+    the reference two to three times within two degrees under the limb,
+    equal by four degrees (docs/KNOWN_ISSUES.md).
+
+- Seams: the anti-solar atlas seam and the pack offset are fixed
+    (5176cab); no NaN / Inf in any probe.
+
+- Performance: atmosphere GPU time 2 to 4x faster than the 8 + 8 march
+    and 5 to 6x faster than the 64 + 32 march (equirect probe); rect air
+    pass 11 -> 2 ms clear and 14 -> 5 ms with clouds at 1920x1080; a
+    rotation rebuilds no generation; the interleave is untouched by the
+    LUT. Not measured: the 4K resolve scaling, the warm-resource budget,
+    DirectX / Metal / integrated GPUs.
+
+- Cold shader compile with clouds (23.1): rect air compute 15 s, its
+    fragment twin 15 s, equirect 4.6 s after the cut guard, cloud pass 2 s;
+    the driver caches them afterwards.
+
+#### Correctness matrix
+
+- Sun elevations: `90, 45, 15, 5, 1, 0.25, 0, -1, -6, -12, -18` degrees.
+- Observer altitudes: `1 m, 2 km, 10 km, 50 km, 100 km, 400 km`.
+- View cases: zenith, anti-sun, solar aureole, both sides of horizon, ground
+    hit, tangent limb and atmosphere entry from space. [Amended 2026-09-05:
+    add the earth-shadow / Belt of Venus edge; the aureole is exact under
+    section 21.2.]
+
+- Components: Rayleigh-only, aerosol-only, ozone-only, all enabled, each
+    disabled in turn.
+
+- Extremes: smallest/largest supported planet, scale heights, turbidity,
+    ozone and ground albedo.
+
+- Night: airglow, moon above/below horizon and light-pollution map.
+- Refraction: off, standard, inferior mirage, mock mirage and orbital limb.
+- Clouds: none, thin, opaque, one layer, two separated layers, horizon
+    grazing, cloud behind geometry, cloud over ground and orbit view.
+
+#### Image thresholds
+
+- Daylight active pixels: relative RGB error P95 <= 1%, P99 <= 3%.
+- Twilight: absolute radiance error and log-luminance delta are primary;
+    relative error is not meaningful near black.
+
+- Transmittance: absolute error P99 <= 5e-4.
+- No one-texel horizon seam, concentric station bands or NaN/Inf values.
+- Ground, atmosphere and celestial refracted edges agree to <= 0.5 output
+    pixel at the target view resolution.
+
+- With a frozen cloud history, LUT versus analytic split composition agrees
+    within the daylight S/T thresholds; cloud edges show no clear-air halo or
+    dark fringe.
+
+- Updating an atmosphere generation while reusing cloud history produces no
+    one-frame flash, double haze or cloud-shaped discontinuity.
+
+#### Performance thresholds
+
+- Phase-2 sky-view bake plus resolve is at least 2x faster than the reference
+    full-output atmosphere at Normal 2048x1024 on the development machine.
+
+- At 4K, changing only output resolution adds resolve cost but does not change
+    integration cost.
+
+- A camera rotation performs no LUT integration rebuild.
+- Cloud interleave remains independently measurable: enabling a clean-sky
+    LUT does not trigger a full-resolution cloud march or reset its history.
+
+- Warm LUT resources stay below 32 MiB at Normal excluding temporary staging;
+    below 64 MiB including staging.
+
+- No synchronous CPU readback on viewport updates.
+
+### 19. Open decisions {#lut-atmosphere-19-open-decisions}
+
+1. Whether 32-bit scatter is required for the aerial LUT after exposure-
+   relative encoding is tested. [Answered 2026-09-05: section 21.6.]
+
+2. Whether lunar scattering joins the first sky-view milestone or the night
+   parity follow-up. [Answered 2026-09-05: first milestone; section 21.5.]
+
+3. Whether the normal aerial depth count can fall from KSA's 96 to 64 without
+   visible near-camera or horizon artifacts. [Open 2026-09-05: 96 kept, 64
+   untested; the limb over-read from space argues for a limb-aware slice
+   distribution before any reduction.]
+
+4. Whether dynamic eclipses belong in the base sky generation or the
+   subtractive residual, based on their angular frequency. [Answered
+   2026-09-05: the base generation carries the eclipse penumbra (the
+   integrator's `pa2EclipseShadow`) and the godray pass applies it to what
+   it subtracts; there is no eclipse residual.]
+
+5. Whether to retain four published PA2 support images after the resolve or
+   collapse internal S/T/support lanes before publication. [Answered
+   2026-09-05: the four rect planes stay; the sky-view planes travel as one
+   RGBA32F atlas, the aerial as six 3D planes plus a range plane.]
+
+6. Whether equirect clouds should remain full-resolution/low-cadence or gain
+   an independent interleaved history after parity. [Open 2026-09-05: the
+   equirect still marches its clouds inline and analytically; the
+   Reflections category can drop them (Reflect Clouds).]
+
+7. Whether two separated PA2 cloud layers require the near/far two-slice
+   contract at Normal quality, or whether the existing weighted centroid is
+   visually sufficient. [Answered 2026-09-05: KSA's two shell segments (K4)
+   with the optical-weight distance blend, one centroid per segment.]
+
+### 20. Recommendation {#lut-atmosphere-20-recommendation}
+
+Proceed with Phase 0 and Phase 1, then build the 192x256 clear-air sky-view
+prototype. Do not spend more time micro-optimizing the isolated
+transmittance-only path: the measured gain is too small. The first engineering
+checkpoint is a sky-view result which is visually within the thresholds and
+at least twice as fast as the current full-output atmosphere. [Amended
+2026-09-05: judged on the equirect alone; section 21.8.]
+
+If that checkpoint fails, retain the analytic renderer and reconsider the
+mapping/precision before implementing aerial perspective. If it passes, build
+the aerial LUT and immediately validate it through the existing rectangle
+cloud split. That is the first end-to-end checkpoint: a fast clean-air LUT,
+temporally reconstructed clouds and correct depth-ordered composition, with
+no cloud march inside the atmosphere pass.
+
+[Executed 2026-09-05: both checkpoints passed (sky-view 0.4% P95 and 2 to
+4x on GPU time; the rect end to end with KSA's cloud composite) and the LUT
+is the default rectangle sky. The equirect checkpoint of 21.8 closed the
+same evening: the lighting sky resolves the LUT chain (LUT Lighting Sky,
+section 9.1).]
+
+### 21. Amendments (2026-09-05 review) {#lut-atmosphere-21-amendments}
+
+Reviewed against the tree at `adb7553`, the first implementation commit
+`5aef8c8` (staged transmittance + 192x256 sky-view producers, diagnostic
+equirect resolver, `atmosphere_luts` owner) and the in-progress aerial
+producer (`aerial_lut_driver.glsl`). Each item states the finding, the
+resolution and what it supersedes. The body above keeps the original text;
+bracketed pointers mark the superseded statements. "As built" notes record
+where the implementation already differs from either text.
+
+#### 21.1 Aerial parameterization and the equirect cloud merge
+
+Finding. Section 10 inherited KSA's camera-frustum aerial. Section 14 lists
+the camera-light generation as independent of camera orientation and 9.2
+says rotation touches only the resolve; a frustum LUT rotates with the
+camera and must rebuild per rotation, which is why KSA rebuilds it every
+frame. Section 9.1 merges equirect clouds by the 11.2 equation, but the
+equirect had no source of `(S_d, T_d)`: a frustum LUT does not cover the
+sphere.
+
+Resolution. The aerial XY domain is the sky-view angular mapping of 8.1 plus
+the depth axis of section 10. It is then orientation-independent, one
+builder serves both output domains, and the equirect merge has its
+`(S_d, T_d)`. Bicubic XY / linear Z and the horizon clamp stand. XY
+resolution is a measurement item: 96 columns of sky-view mapping are 3.75
+degrees per column; raise XY before considering a frustum variant. The
+uniform-source split `S_d ~= S_D * (1 - T_d) / (1 - T_D)` with `T_d` from the
+transmittance LUT is the fallback for a backend without 3D image stores.
+
+As built: implemented in `aerial_lut_driver.glsl` and
+`sky_view_lut_lib.glsl`: 96x96 XY through `pa2SkyDirectionFromLut`, 96 depth
+slices, per-direction range, and `z^2` inside the atmosphere. The consumer is
+diagnostic-only until the production resolve route is complete.
+
+#### 21.2 The aerosol phase leaves the LUTs
+
+Finding. Section 8 folds `phaseM` into the stored radiance. KSA can, because
+its Mie is Cornette-Shanks at g = 0.8, tens of degrees wide. PA2's OPAC phase
+is a three-lobe Draine with a forward lobe at g 0.97-0.99 (`opac_phase_coef`),
+about one degree wide, against 1.9 degree azimuth columns at 192 and 3.75 at
+the aerial's 96. The sun and moon aureoles smear and fail the 1% daylight
+gate; section 18 lists the aureole as a view case with no strategy.
+
+Resolution. Along a straight ray the scattering angle is constant, so single
+scattering factors:
+
+```text
+L_ss = phaseR(theta) * I_R + phaseM(theta) * I_M
+I_x  = sum W * T_sun * shadow_smooth * beta_sx * rho_x      (phase-free)
+```
+
+Store per LUT texel the phase-free integrals `I_R`, `I_M` for the sun, the
+same pair for the moon, and the isotropic term `L_ms + L_emission`. The
+resolve evaluates the exact Rayleigh and OPAC phases per output pixel (the
+moon with its own phase angle). The aureole is then exact at any LUT size and
+the column count stops being an aureole constraint. `T_sun`, `shadow_smooth`
+and Psi carry no view-phase dependence, so the factoring is exact for them.
+Planes: the sky-view grows to three RGB planes (five with the moon), trivial
+at 192x256; the aerial doubles, which the EV pre-scale of 21.6 absorbs. With
+refraction the angle drifts along the bent path by at most the total bend;
+use the angle of the apparent direction and record the residual error in the
+last degree above the horizon as a known limit, not a station scheme.
+
+Supersedes: the section 8 pseudo-code (phase inside the sum), the plane
+counts in section 5, the aureole case in section 18.
+
+As built: the shared integrator stores phase-free sun/moon Rayleigh and aerosol
+terms; the exact PA2 Rayleigh/OPAC phase is applied at resolve. The aureole is
+therefore no longer limited by LUT azimuth resolution. Production image gates
+still need to validate the resolve route and the refraction residual.
+
+#### 21.3 Refraction: the shared walk, no 1D table, two sky generations
+
+Finding. The camera-height `ray_geometry` table of section 12 re-introduces
+the altitude-keyed table that `docs/design-refraction-2026-09.md` (4.1)
+retired for its flicker while flying ("the camera altitude is NOT an input
+any more"). Section 9's "both output domains consume the same sky LUT"
+contradicts the equirect-straight law (refraction design 4.5; changelog: the
+equirect never refracts view rays).
+
+Resolution. The sky-view and aerial producers run the shared walk
+(`pa2RfPrepare` / `pa2RefrTrace` / `pa2RfAdvance` in
+`atmosphere_refraction_lib.glsl`) per texel, exactly as the rect air pass
+runs it per pixel today; 49k + 9k texels cost less than any rect pixel count.
+The full-resolution BG/ground compose keeps its own per-pixel walk. With
+refraction on, bake two sky-view generations, STRAIGHT (`PA2_REFRACTION` 0,
+equirect) and WALKED (rect), and the same for the aerial when the rect's
+aerial is walked. Shimmer stays out of the LUT, as section 12 says. The
+`ray geometry` row of section 14 and the Phase 5 table are gone; Phase 5
+becomes "walked generations + alignment tests". Mirage folds: their sharp
+per-channel edges are B-plane content under the horizon-line law (the BG
+pass writes verdict-matched S minus plain S into B, 2026-09-04); the LUT
+holds the smooth part.
+
+#### 21.4 Psi stays in the ambient atlas
+
+Finding. Section 7 and Phase 1 promote the 64x64 Psi band to a dedicated
+resource. Every Psi consumer (`pa2PsiMS4` in the sky march, `uPsiScratch` in
+the ambient band builder, the cloud march) would move to a new sampler slot;
+the transmittance-sampler leak cited in section 15 is that class of change.
+
+Resolution. No promotion. Builders bind `uAmbientLUT` and read rows
+[128, 192) as today. The owner's `psi_ms` entry is an alias to the published
+atlas generation, not a copy. The Phase 1 bullet is dropped.
+
+As built: correct. Both producers bind `uAmbientLUT`; the owner aliases the
+scratch texture.
+
+#### 21.5 Steps, one integrator, units, harness, gates
+
+- Steps are free. 49,152 sky texels x 64 steps is 3.1 M iterations, under a
+    tenth of one 2048x1024 x (8 + 8) bake. The producers use one fixed count
+    (the NASA row) for every tier; the section 8 ladder is gone. Once the LUT
+    path is production, `atmosphere_steps`, `atmosphere_ms_steps` and the
+    fractional air resolution (`sky_air_resolution`) lose their arm and go,
+    together with the parked aerial atlas (`_AERIAL_ATLAS_ENABLED`,
+    `_ensure_aerial_atlas`, the ATLAS_S/T images): retire the knob and its
+    losing arm together. As built: the sky and aerial producers use the shared
+    `atmosphere_lut_integrator.glsl` with deterministic 64/96-step checkpoint
+    schedules; no per-pixel property-count jitter is carried into the LUTs.
+
+- One integrator. Section 8 asks for one clear-air integrator for both LUTs.
+    The prototype now has both producers call
+    `atmosphere_lut_integrator.glsl` (section 15), with matched transport terms
+    and explicit 64/96-step checkpoint schedules. This removes the former
+    `S_D`/`S_d` estimator mismatch; the remaining halo risk is in the not-yet-
+    implemented cloud merge and production resolve.
+
+- Units. All published radiance planes use one convention and are EV-scaled
+    at store; the resolve unscales before composition. The sky-view radiance is
+    RGBA32F and the aerial radiance/transmittance planes are RGBA16F.
+
+- Harness (Phase 0). Report atmosphere GPU time apart from the Blender image
+    publish: `foreach_set` of one 2048x1024 RGBA32F plane is tens of
+    milliseconds and caps the apparent speedup. Measure the clouds-on share:
+    the KSA cloud march (768-sample cap at Normal) dominates a cloudy bake, so
+    the atmosphere share bounds what this project returns. As built:
+    `scripts/probe_sky_view_lut.py` records statistics, errors and cache reuse
+    but no timings; add medians with alternated variant order per Phase 0.
+
+- Gates (section 18). The 2x threshold is stated on atmosphere GPU time. The
+    twilight view cases gain the earth-shadow / Belt of Venus edge, the
+    sharpest smooth-sky gradient and the test of the row count at the horizon.
+    The aureole case is exact under 21.2.
+
+- Lunar SS joins the first milestone (8.2, open decision 2): one extra
+    transmittance tap and one Psi tap per step; `AUTO` would otherwise regress
+    every night scene. As built: the shared integrator includes sun and moon
+    single/multiple-scattering terms; the factory probe keeps the moon disabled,
+    so a dedicated night matrix remains TODO.
+
+- Airglow. The aerial excludes emission: the cut column already omits it
+    because the 90-250 km layers sit behind every mesh. The sky-view includes
+    it. As built: the sky-view adds direct airglow; the aerial intentionally
+    excludes direct airglow because finite mesh/cloud ranges end below the
+    emission shells.
+
+- Scene-lamp air (`pa2LightsAir`, Scene Lights 2026-09-03) is per-pixel,
+    additive and independent of the march. It stays in the resolve for both
+    domains; it is not bakeable.
+
+- Cloud shadows on air. Today the march shades every air sample through the
+    cloud shadow volume; in LUT mode that exists only through the 11.5
+    residuals, zero until Phase 6. Phase 4 therefore ships an interim mode
+    without crepuscular rays. The Phase order (6 before 7) is the guard: `AUTO`
+    does not become default before Phase 6.
+
+#### 21.6 Precision, storage, generations
+
+- Open decision 1 is answered by existing machinery: the scatter EV scale
+    (`u_pa2.ozone2.z`, the World Output fp16 window placement) pre-scales at
+    store and the resolve unscales, so the aerial planes are RGBA16F. The
+    sky-view stays 32-bit; 1.3 MiB is irrelevant.
+
+- Writable `FLOAT_3D` image stores are proven on Vulkan by the shadow volume
+    (`sky_luts.py`: compute dispatch + `info.image(..., "FLOAT_3D", WRITE)`).
+    The tiled-2D hedge of section 5 is dropped. A fragment fallback cannot keep
+    the one-march/many-slices invariant without image stores either, so the
+    fallback on a backend without them is `AUTO` -> reference march for finite
+    depth, not a fragment aerial.
+
+- Generations (section 14): three rows suffice. Static (optical + MS, keyed
+    as today), per-bake (sky-view + aerial, rebuilt whenever the camera-light
+    key changes, which in fly mode is every draw and is cheap), resolve. The
+    ray-geometry row is gone (21.3); the cloud rows stand (section 11).
+
+- Horizon line. The LUT-side clamp (8.1) handles the LUT tap. The published
+    S plane still gets a bilinear world tap, which the horizon-line law already
+    solves in B (BG pass, 2026-09-04). Do not re-solve it in the resolve.
+
+#### 21.7 Cloud contract details (section 11)
+
+- `f`, the conservative front distance, has a home: `cloud_T.a`, written as
+    zero today and marked reserved in section 5.
+
+- The 11.2 equation is verified identical to the live composite in
+    `pa2ColumnComposite` (`L_cloud * T_cam_to_cloud + S_front * (1 - T_c) +
+    S_full * T_c`, `T = T_air * T_c`) and exact: `T_c * (S_D - S_d)` is the
+    attenuated behind-cloud air. The merge helper is a refactor of proven code.
+
+- Open decision 7: `pa2CloudArm` composites the flat far deck behind the
+    volumetrics and the single centroid follows the volumetric layer; a
+    two-slice contract first needs the deck's own `d`. Note it when it shows.
+
+#### 21.8 Process
+
+- The Phase 2 go/no-go is judged on the equirect alone: the role law makes
+    it lighting and reflections only, simple and fast, with no direct-view
+    risk. The rect follows once 21.2 is in.
+
+- Branch: `codex/ksa-lut-atmosphere-clouds`, off `celestials-rect` at
+    `adb7553`.
+
+#### 21.9 The KSA cloud pipeline, ported exactly (2026-09-05)
+
+User direction: implement KSA's cloud rendering exactly (compositing,
+sampling, upsampling), then deviate for PA2's own shading; the
+analytic march stays as the reference sky. The port runs in stages,
+each measured with `scripts/probe_lut_rect.py` against the jitter-free
+64 + 256 march (sun 20 deg, 60 deg FOV, 1920x1080, clouds on).
+
+**K1, compositing (RaymarchCloud.comp:377-442).** The cloud pass
+composites each layer at its own weighted centroid: the aerial LUT
+gives the eye-to-cloud transmittance and the in-scatter in front, the
+transmittance LUT the sun transmittance at the centroid
+(`march_cloud_segment_ksa` under `PA2_TRANSMITTANCE_LUT`), and the
+layer leaves as the premultiplied `cloud * T_eye + inscatter *
+(1 - T)` (`pa2CloudLayerAerial`). Layers blend front to back as
+`prev + prev.T * cur`, the stored distance follows
+`GetCloudDataInterpolationWeight` (`pa2CloudLayerWeight`). The air
+pass is UpscaleCloud's last line, `main * T_cloud + cloudColor`: no
+front tap, the history holds the composited colour. The cloud compute
+build is keyed on the LUT option and binds the aerial samplers.
+Clear sky unchanged (0.55% P95); the cloud pass 8.9 ms at full res.
+
+**K2, godrays (Godrays.comp / Godrays.glsl, Atmosphere.comp:242-266,
+RaymarchCloud.comp:399-430).** `godray_lib.glsl` marches the SHADOWED
+single scattering with PA2's optics: what the LUT integrator gave a
+sample (transmittance LUT, planet penumbra, eclipse) times the
+fraction the LUT does not know is shadowed, `1 - casters * cloud`,
+the cloud factor from the shadow volume (Beer, plus PA2's
+delta-Eddington downflux behind `PA2_GODRAY_DOWNFLUX`), aerosol phase
+damped 5% as KSA [damp removed 2026-09-05: PA2's planes are phase-free,
+so it only leaked 5% of the aureole into object shadows; 23.1].
+`godray_driver.glsl` is the low-res pass (half the
+air dims, 50 uniform steps, dithered start) with KSA's flip/flop
+history: the density-weighted sample distance reprojects through
+the previous frustum (the cloud resolve's dual basis, push constants
+grH0..3), the signed distance separates sky from terrain, the
+terrain/sky disocclusion thresholds and velocity powers are KSA's.
+The air pass subtracts the bilinear tap (`PA2_GODRAY_TAP`, slot 28);
+the cloud pass marches its own 25 steps to the centroid
+(`PA2_GODRAY_CLOUD_STEPS`). The pass runs per round and per draw
+(`_godray_pass`, no compiles in the draw). Only single scattering is
+occluded, on purpose (KSA): the LUT's multiple scattering keeps
+lighting the shadowed air. The PA2 coupling of 11.5 is off
+(`PA2_LUT_COUPLING_PA2 0`), kept as the own-shading option.
+
+Measured, clouds on, vs the converged reference (P95 rel): sky
+pixels 19.6%, opaque cloud 17.9%, clear air between clouds 24%
+(the coupling had 18.5 / 18.5 / 15 at 65 ms); K1 alone, no godrays,
+sat at 60 / 63 / 15. Centre-column cloud rows within 4%. Cost at
+1920x1080 full-res cloud pass: cloud pass 13.2 ms (+4.3 for the 25
+steps; 1/9 of that interleaved), godray pass 4.0 ms, air pass 17.5 ms
+(7.5 of it the LUT resolve, the rest the ground cloud-shadow arm that
+the march path pays too), resolve 3.5 ms: ~38 ms against the 8 + 8
+march's ~70 and the reference's 182. The remaining error is the
+multiple-scattering coupling KSA leaves out by design (the ground
+row under an overcast deck reads 3x the reference's 0.009).
+
+**K3, upsampling (UpscaleCloud.comp, UpscalingFunctions.glsl,
+DilateMotionVectors.comp), landed.** The interleave is 3x3
+(`_CLOUD_ILV` / `PA2_CLOUD_ILV`, a 9-cell spread order) with the
+block-centre convention; the cloud pass writes KSA's motion vectors
+itself (`GetMotionVectors` of the centroid through the history
+frustum: the round UBO's clh1..3 rows carry that dual basis on
+interleaved rounds, clh0.z flags it, clh0.w stays 0 so the round's sky
+pass keeps its identity tap; a transparent march marks HALF_MIN); a
+jump-flood dilation (`cloud_mv_dilate_lib.glsl`, three passes at
+steps 1/2/4, the last with KSA's mid-layer fallback, depth parity by
+the viewgeo map) runs over the low MV plane before the resolve, which
+reads the dilated vectors instead of deriving them (the crH push
+constants are gone). Deliberate deviation: the depth-aware
+neighbourhood and the nearest-depth fallback exist because KSA clips
+the cloud march at the terrain per low-res pixel; PA2's pair is never
+clipped (the per-fragment coverage cut of the air pass owns
+silhouettes, the 2026-09-03 law), so those branches have nothing to
+protect and stay out. `probe_cloud_resolve.py` (headless: twins
+bit-identical, MV plane carried, invalid vectors never win, the
+dilation fills one step) is green; `probe_cloud_interleave.py`
+(windowed, still camera, deterministic clouds, 14 interleaved rounds
+against the full-res pair) measured 3x3 vs the committed 4x4: cloud
+pixels 13.7% vs 19.2% P95 after 14 rounds, T 21% vs 35%; dilate 0.2
+ms, resolve 1.1 vs 2.0 ms, the low pass 17 ms for 1/9 of the rays vs
+13 for 1/16. FINDING: both drift from the full-res pair over rounds
+(round 1 exact, then the neighbourhood clamp bites a little more each
+round). That is KSA's design: the clamp is the content tracker for a
+DITHERED march, and against a deterministic one it can only pull
+history toward the coarse taps. The 3x3 halves it; the right metric
+for the shipped (jittered) path is a converged average of many
+full passes, a later probe. Also measured: the low pass costs 5-7x
+more per ray than the full pass (sparser rays, colder noise caches),
+and the tricubic shadow-volume tap made the 25-step godray march the
+cloud pass's whole cost (full res 28 -> 102 ms), so the godray
+marches now take KSA's trilinear fetch (`PA2_GODRAY_TRICUBIC 0`).
+
+**Phase 5, the walked generations, landed (2026-09-05).** The sky-view
+and aerial producers compile the refraction walk in (`PA2_REFRACTION`
+1 in `_sky_view_toggles`, the runtime strength lane arms it, the dep
+key carries `_refraction_key`) and march the BENT path per texel
+(`lut_walk_lib.glsl`: `pa2RefrTrace` at the LUT origin with the
+float64 altitude lane, `pa2RfAdvance` per sample, the fast branch's one
+rotation, MISS / GROUND / EXIT / CAP as in the air pass), so the planes
+stay keyed by the apparent direction and hold what that direction
+sees; the aerial range becomes the path length and the consumer reads
+the range plane for every ray while refraction is on. Sun paths take
+the per-sample effective sphere (`pa2AtmosphereLutAdvanceSun`), the
+sky-view's airglow rides the walk's exit pose, and the world shimmer
+stays out of the LUT (`PA2_RF_NO_TURB`: no turbulence volume in the
+producer builds). The refraction gate on the option is gone. Kept
+straight, by design: the godray pass and the cloud pass's centroid
+march (the KSA cloud march never walked), and the phase at the
+consumer, which rides the apparent direction (the aureole shifts by the
+ray's bend at the horizon; mirage folds are B-plane content under the
+horizon-line law, 21.3). The equirect keeps no LUT consumer, so the
+second (straight) generation of 21.3 is not needed yet. Measured
+(`PA2_PROBE_REFRACTION=1`, sun 20 deg, the march walking its own bent
+path as the reference): clear sky 2.9% P95 (the LUT 1-3% brighter,
+more in blue; the aureole-side phase at the apparent direction and the
+planet-sphere ground bounce are the suspects), transmittance 0.8%,
+clouds on 19%; refraction off stays at 0.5% / 18%. The march itself
+costs 69 ms clear and 198 ms with clouds while walking, the LUT path
+is unchanged.
+
+**K4, sampling, landed.** (a) `FindCloudLayerIntersections`: the arm
+intersects the band's inner sphere (`LAYER_BASE_H`, the lowest enabled
+layer base; the planet while the rain layer carries mass, since the
+shafts hang under the band) and marches the one or two shell segments
+as KSA layers, front then back: the front's transmittance drives the
+back's in-march early exit (`g_pa2KsaPrevT`, RaymarchCloud.comp:202)
+and the KSA layer blend with the optical-weight distance; each
+segment gets its own aerial composite. Rays under the band no longer
+march the gap. (b) `GetMipLevels`, analytic instead of
+finite-differenced (compute has no derivatives; KSA's groupshared
+trick is exactly the per-pixel footprint): mip = log2(0.25 · distance
+· pixel angle · volume texels per noise repeat), the tap's own repeat
+added per shape / detail tap (`PA2_KSA_LOD`), mapped onto PA2's
+fine / 4x-pooled volume pair as LOD = mip / 2. The pixel angle is the
+consuming pass's own (`g_pa2LodPixelAngle`: the rect's display pixel,
+the equirect's column; the volume bakes keep the old 10-60 km ramp).
+(c) The temporal noise slices and the golden-ratio light dither were
+already PA2's blue-noise equivalents. Rect LUT parity unchanged (sky
+17.9%, opaque cloud 16.0% P95; the reference march shares the
+sampling). FINDING: KSA's mip bias keeps far clouds four texels per
+pixel finer than PA2's ramp did (fine detail to ~70 km instead of
+coarse from 10 km), and the still-camera drift of the deterministic
+interleave grew with it (20% / T 53% P95 after 14 rounds vs 14% /
+21%): sub-pixel detail is what the neighbourhood clamp cannot hold.
+KSA pairs that detail with a dithered march and the reduceFlickering
+relax; the shipped path (jitter on) is the one to judge, visually.
+
+### 22. Source anchors {#lut-atmosphere-22-source-anchors}
+
+KSA reference tree:
+
+- `D:/Dropbox/Projects/PSA2/source_shaders/ksa/Core/Shaders/Atmosphere/AtmosphereLuts.glsl`
+- `D:/Dropbox/Projects/PSA2/source_shaders/ksa/Core/Shaders/Atmosphere/AtmosphereFunctions.glsl`
+- `D:/Dropbox/Projects/PSA2/source_shaders/ksa/Core/Shaders/Atmosphere/TransmittanceLut.comp`
+- `D:/Dropbox/Projects/PSA2/source_shaders/ksa/Core/Shaders/Atmosphere/MultipleScatteringLut.comp`
+- `D:/Dropbox/Projects/PSA2/source_shaders/ksa/Core/Shaders/Atmosphere/SkyLut.comp`
+- `D:/Dropbox/Projects/PSA2/source_shaders/ksa/Core/Shaders/Atmosphere/AerialPerspectiveLut.comp`
+- `D:/Dropbox/Projects/PSA2/source_shaders/ksa/Core/Shaders/Atmosphere/Atmosphere.comp`
+- `D:/Dropbox/Projects/PSA2/source_shaders/ksa/Core/Shaders/Atmosphere/Godrays.comp`
+- `D:/Dropbox/Projects/PSA2/source_shaders/ksa/Core/Shaders/Clouds/RaymarchCloud.comp`
+- `D:/Dropbox/Projects/PSA2/source_shaders/ksa/Core/Shaders/Clouds/Upscaling/UpscaleCloud.comp`
+- `D:/Dropbox/Projects/PSA2/source_shaders/ksa/Core/Shaders/Clouds/ShadowVolume/ShadowVolume.comp`
+
+PA2 baselines:
+
+- `shaders/atmosphere_15/atmosphere_cloud_march_lib.glsl`
+- `shaders/passes/sky_driver.glsl`
+- `core/sky_luts.py`
+- `core/sky_bake.py`
+- `core/sky_rect.py`
+- `docs/design-cloud-temporal-upscale.md`
+- `docs/research-ksa-cloud-teardown-2026-08.md`
+- `docs/research-temporal-upscaling-2026-07.md`
+
+### 23. Implementation ledger (2026-09-05) {#lut-atmosphere-23-implementation-ledger}
+
+This section is the current execution record for the branch. It supersedes
+older phase wording where it conflicts with the prototype state above.
+
+#### Done
+
+- Created branch `codex/ksa-lut-atmosphere-clouds` and landed the prototype in
+    commits `5aef8c8`, `820e409`, and `fce7d69`.
+
+- Added staged/last-good `atmosphere_luts` ownership and cache-safe generation
+    handling. The transmittance LUT is 256x64; the diagnostic sky-view LUT is
+    192x256.
+
+- Added a progressive 96x96x96 aerial LUT. One XY invocation walks one ray and
+    writes all depth slices, with per-direction range, horizon handling, and
+    bicubic XY / linear-Z sampling.
+
+- Unified sky-view and aerial transport in
+    `shaders/passes/atmosphere_lut_integrator.glsl`. LUTs store phase-free sun
+    and moon Rayleigh/aerosol terms plus isotropic/multiple-scattering and
+    transmittance; the resolve applies the exact PA2 OPAC/Rayleigh phase.
+
+- Preserved PA2 optical behavior, including lunar/night terms and the existing
+    airglow policy: direct airglow is in sky-view, intentionally omitted from the
+    finite-depth aerial volume.
+
+- Added the `atmosphere_aerial_lut` opt-in property/panel control and diagnostic
+    equirect sky/aerial resolvers. The production rectangle/equirect paths still
+    default to the reference march.
+
+- Verified Blender 5.2 Vulkan support for writable `FLOAT_3D` images and ran
+    the existing suite: 81 tests passed.
+
+- Takeover 2026-09-05 (Claude): the shared integrator gained the planet
+    penumbra on the sun path and the reference's ground-bounce arm (direct sun
+    plus the measured sky bands, light pollution as ground emission; aerosol
+    weight `exp(-h/Ha)` as in the reference), plus probe-only
+    `PA2_LUT_DEBUG_NO_BOUNCE` / `PA2_LUT_SKY_STEPS` defines; the sky-view key
+    carries the bounce scale; three probes added (parity + timing, term
+    isolation, MS-step trend). Suite 81/81.
+
+- Phase 4 rect (2026-09-05, Claude): `atmosphere_lut_rect` ("LUT
+    Atmosphere (Rect)", Scientific > Atmosphere). The rect AIR build
+    compiles `PA2_ATMOSPHERE_LUT_RECT` and declares the seven aerial
+    samplers on the celestial slots it never uses (15-20, 27); the column
+    composite in `sky_driver.glsl` resolves `S_D, T_D` to the segment end
+    and `S_d, T_d` to the cloud front from the aerial (the 11.2 equation,
+    lamp air added per pixel) and returns before the march when runtime
+    bit5 (`PA2_RT_ATMO_LUT`) is set. The round march arms the bit after
+    ensuring the chain at the round origin (compiles allowed); the per-draw
+    air pass ensures with `allow_compile=False` and falls back to the march
+    for a cold producer. The bake warms the producers when the option is
+    on. `pa2AtmosphereLutCompose` moved into `sky_view_lut_lib.glsl` so a
+    consumer needs no integrator. Only the aerial is consumed by the rect:
+    its last slice IS the full column, so sky, geometry and cloud-front
+    taps come from one source and cannot seam (the sky-view LUT stays for
+    the equirect). Refraction: the LUT is read on the straight ray with
+    the walk's segment end (Phase 5 bakes walked generations).
+
+- Fast Lighting Sky (user request 2026-09-05): `sky_lighting_fast` drops
+    the scene lamps (lt_cfg.x = 0) and the 3D object shadows
+    (cs_center.w = 0) from every equirect gather, renders included, through
+    a "fast" lighting tier.
+
+- Fixed on the way: the per-draw air pass gate compared a 2-tuple
+    against the 3-tuple compute cache key (formats joined it 2026-08-21)
+    and bailed to the warp on every draw; one key builder serves both now.
+    The runtime bitfield readers isolate their bit (`PA2_RT_NO_GROUND` read
+    every bit above 4, the caster jitter test every bit above 0).
+
+- Commit trail after the rect option (2026-09-05): 841cc67 coupling
+    ratios (kept off); 466274b K1 + K2; 1782ccf K3; 0381b1a K4, the F12
+    pair, the night scale, DEFAULT ON; c060098 per-sample LUT arm in
+    renders, the sky-view atlas tap; 86d9c45 twilight verdict; 11792e8
+    Phase 5 walked generations; 5176cab atlas pack offset, exact sky-ray
+    test, Phase 0 toggles retired; 856ec40 the cut guard, the Reflections
+    category, Reflection Probe / Reflect Clouds, the Atmosphere Resolution
+    ladder, the godray damp removal, the space-limb scale, the air warp
+    switch (off); 6b9ef4a / e5186e2 the space verification and its to-do.
+
+#### Findings
+
+- The Vulkan LUT probe passed with finite outputs, zero aerial transmittance
+    depth delta, and a zenith transmittance error of 0.001953125 versus the
+    exact transmittance LUT.
+
+- Shared sky/aerial transport is numerically aligned: resolved-scatter P95
+    relative error is 0.0021126 (0.21%), and resolved-transmittance MAE is
+    0.0004902 (max 0.001648) on the parity probe. Cache reuse and generation
+    stability also pass.
+
+- Estimator verdict (2026-09-05, `scripts/probe_lut_ms_trend.py`, sun 20
+    degrees, 2048x1024, scene lights off): the production march converges
+    ONTO the LUT as its MS step count rises past the property ceiling. Sky-wide
+    P95 relative error of the LUT resolve against the reference at 64 view
+    steps and 8 / 16 / 32 / 64 / 128 / 256 MS steps: 45% / 24% / 11% / 4.1% /
+    1.0% / 0.40%; zenith radiance at 256 MS steps [1.4949 2.2106 4.1168]
+    against the LUT's [1.4955 2.2106 4.1188]. The LUT itself is converged (64
+    vs 256 steps: 0.09% P95). Single scattering alone agrees to 0.42% P95 at
+    any MS count; the whole gap was the reference's MS quadrature
+    under-resolving the aerosol layer on steep rays. Consequence for
+    production: the Normal tier (8 + 8) is 45% dark at the zenith and 6% high
+    in blue transmittance against PA2's own converged model; even the NASA row
+    (64 + 32) is 11% off. The acceptance target is the converged reference
+    (256 MS steps) or the LUT itself, not the property defaults.
+
+- Phase-free storage removes the OPAC aureole from the LUT-resolution
+    constraint. Exact per-output phase is now independent of the 192/96 angular
+    column count, subject to the documented refraction-angle residual.
+
+- Timing (2026-09-05, `scripts/probe_lut_parity.py`, RTX 4080, Blender 5.2
+    LTS Vulkan, fenced warm medians, Normal 2048x1024, clouds off): march draw
+    5 to 11 ms at 8 + 8 and 13 to 18 ms at 64 + 32; readback of the four
+    planes 21 ms; Blender image pixel upload 53 to 57 ms; whole equirect bake
+    82 to 97 ms. LUT chain (transmittance + sky-view + aerial, forced rebuild)
+    2.5 to 2.9 ms, of which about 0.7 ms per pass is the Python/driver floor;
+    sky-view resolve 0.8 to 1.0 ms and aerial resolve 0.9 to 1.0 ms at
+    2048x1024. Verdict on the section 18 gate: on atmosphere GPU time the LUT
+    is 2 to 4x faster than the 8 + 8 march and 5 to 6x faster than the 64 + 32
+    march it actually matches; on bake wall time it moves 90 ms to about 85,
+    because readback plus pixel upload is 75 ms of the bake. The equirect
+    publish path, not the atmosphere, bounds the lighting sky.
+
+- Night: the factory scene's default point lamp lights the air through
+    Scene Lights (about 7e-5 at the zenith, flat, blue); it is per-pixel
+    resolve content and must leave the parity scene. With it removed and the
+    moon at 40 degrees the LUT matches the 64 + 32 reference to 1% at the
+    horizon and is brighter only by the same MS deficit at the zenith.
+
+- Dusk (sun -4 degrees): LUT vs the 64 + 32 reference 6% P95, the same MS
+    deficit; the horizon band agrees within 2%.
+
+- Rect (2026-09-05, `scripts/probe_lut_rect.py`, 1920x1080 air planes, 60
+    degree FOV 10 degrees up, sun 20 degrees, scene lights off): clear sky,
+    the LUT resolve vs a jitter-free rect march at 64 view steps with the
+    MS lane forced to 256: scatter 0.62% P95 on sky pixels (transmittance
+    MAE 6e-4), while the production 8 + 8 jittered march is 46% off the
+    same reference. Air pass (compute publish, fenced medians): 11.3 ms at
+    8 + 8, 56 ms at 64 + 256, 1.8 ms with the LUT. With clouds: 14.4 / 181
+    / 4.9 ms; transmittance matches, radiance under decks does not (79%
+    P95): the reference march shadows and feeds the AIR through the cloud
+    field per sample (bit2 cloud shadows, the MS cloud mix and downflux),
+    none of which is in the clear-air LUT. That coupling is the section
+    11.5 residual work; until then LUT mode renders cloudy skies with
+    clear air between the clouds and no godrays. The remaining 5 ms with
+    clouds is the ground shadow walk and the cloud ambient lanes, not
+    atmosphere.
+
+- Fast Lighting Sky measured on a one-lamp scene: equirect march 28.0 ->
+    26.1 ms; the option pays off with many lamps or a dense caster set.
+
+- Cloud-to-air coupling, first cut (2026-09-05,
+    `atmosphere_lut_residual_lib.glsl`): a difference march (coupled minus
+    clear source) over-subtracted, because it paired an 8-sample estimate
+    of the clear source with the LUT's converged one and the coarse
+    cloud-front snapshot landed on one bin. The RATIO form fixed it: the
+    march estimates coupled / clear of the single-scatter and of the
+    isotropic source from the same samples (quadrature bias cancels, a
+    clear sky is exact by construction), split at the cloud front, bounded
+    at the ray's exit from the cloud layer sphere with the tail above taken
+    straight from the LUT (`pa2SampleAerialPerspectiveParts` returns the
+    single-scatter and isotropic parts apart). It reproduces the reference
+    march's coupling terms exactly: sun-column Beer + delta-Eddington
+    downflux on SS, the zenith column's AO / mix / field AO on the Psi MS,
+    the ground bounce under the deck, and the scene casters. Rect, clouds
+    on, deterministic cloud pair, vs the jitter-free 64 + 256 march: sky
+    pixels 79% P95 without coupling -> 18% with 8 samples; clear air
+    between clouds 26% -> 15% (8) -> 11% (16) -> 8% (32); opaque cloud
+    pixels 69% -> 18%, centre-column cloud rows within 1%. Cost is the
+    verdict: 8 samples make the LUT air pass 50 to 65 ms with clouds against
+    the march's 45, because the coupling's per-sample work (shadow-volume
+    tap, coarse zenith walk, two transmittance taps, Psi and band taps) IS
+    the expensive part of the march. Kept behind `PA2_LUT_COUPLING_PA2`
+    (interim 1 until the KSA godray pass lands, then 0) as the future
+    own-shading option; the shipping path is KSA's.
+
+#### TODO / next gates (rewritten at the 2026-09-05 review)
+
+Landed since the original list (details in Done, 21.9 and 23.1): the rect
+default, the fragment / F12 pair, the night radiance scale, the sky-view
+atlas tap, K1 to K4, Phase 5, the atlas pack and sky-ray fixes, the Phase
+0 toggle retirement, the godray damp removal, the space-limb scale fix,
+the compile guard, the Reflections category with Reflection Probe /
+Reflect Clouds, the air warp switch (off by default).
+
+Open, in priority order:
+
+1. Equirect production resolve (section 9.1): DONE later the same day
+   (LUT Lighting Sky). Remaining there: the equirect variant still
+   carries the fallback march (item 3), and the inline cloud arm is the
+   whole bake with clouds (about 20 ms at 1024x512).
+
+2. Space views: CLOSED (2026-09-05, evening). Against a converged
+   analytic reference (256 view + 256 MS steps) the aerial planes read
+   the limb haze to 1.5% half a degree under the limb at 600 km and
+   within 4% down the profile; the "over-read" was the 16-step tier
+   reference missing the boundary layer on grazing paths. No LUT change
+   was needed; the lesson is in KNOWN_ISSUES.
+
+3. Compile cost of the rect pair (23.1): DONE for the fallback march
+   (2026-09-05, evening): LUT builds compile the analytic column march
+   out (`pa2ColumnComposite` is LUT-only under `PA2_ATMOSPHERE_LUT_RECT`,
+   the cloud arm composites KSA-style unconditionally) and a pass the
+   chain cannot serve is skipped by its caller (round, per-draw air,
+   render sample, probe bake). Cold builds, EEVEE-contended: rect air
+   compute 17.6 -> 5.1 s, fragment twin 17.3 -> 5.0 s; parity unchanged.
+   Still open in the same item: the cut still runs the LUT resolve twice
+   (a single-instance cut would halve what is left), and the equirect
+   variant stays at 17 s because its bulk is the inline cloud arm (1.5 s
+   with Reflect Clouds off).
+
+9. Refraction and the LUT lighting sky: RESOLVED (user 2026-09-05,
+   "the equirect does not need atmosphere refraction"): the probe reads
+   a second, STRAIGHT generation of the chain (owner slots
+   `sky_view_straight` / `aerial_straight`, the refraction lane zeroed,
+   keyed on a constant; design 21.3), baked only while refraction is on
+   and shared with the rect otherwise. Verified: refraction on, the rect
+   at 2.05% P95 against the walking reference, the probe at 0.47% against
+   the converged straight one, both generations resident (about 50 MB
+   more while refraction is on).
+
+4. Clouds against the reference (18 to 20%): KSA's design leaves the
+   multiple-scattering coupling out. PA2's own coupling
+   (`PA2_LUT_COUPLING_PA2`, 21.9) reproduces it at the march's price; a
+   cheaper form (a ratio from the godray march's own samples) is the
+   own-shading follow-up.
+
+5. Interleave drift: judge the shipped (jittered) 3x3 path against a
+   converged average of many full passes; the deterministic comparison
+   only shows the clamp pulling history toward the coarse taps (21.9 K3).
+
+6. Acceptance breadth: DirectX / Metal / integrated GPUs, the
+   warm-resource budget, 4K resolve scaling, 48 / 64 aerial depth tiers,
+   a night matrix (moon phases, light pollution).
+
+7. Keys: the sky-view generation carries the ground-bounce scale and the
+   refraction key; the albedo colour (`cl_galb`) and the starlight gain
+   lanes are still not keyed.
+
+8. Object-compositing probe: the scripted viewport composite carried no
+   cut haze on the object in `probe_viewgeo_aureole.py` (the user's
+   viewport does); the probe's compositor setup is unchecked.
+
+- LUT Lighting Sky (2026-09-05, evening): the equirect resolves the LUT
+    chain (section 9.1 note). Finding: the shipped simplified lighting sky
+    was 2.3x dark at the zenith against the converged model, so every
+    scene's world lighting brightens under the LUT probe; against the
+    converged 64 + 256 equirect the LUT reads 0.47% P95.
+
+- Fallback march removed from the LUT builds (2026-09-05, evening; item
+    3 of the to-do): rect air compute 5.1 s and fragment 5.0 s cold
+    (contended), from 17 s each; rect clear-sky parity 0.50% P95 and the
+    equirect 0.47% unchanged; a LUT pass without a generation is skipped
+    (the pair keeps its planes, the probe its last bake) instead of
+    marching.
+
+- Straight probe generation under refraction (2026-09-05, evening):
+    see to-do item 9; the equirect never bends.
+
+- Cycles viewport (2026-09-05, night; user: "PA2 does not really work on
+    Cycles — the Updating Lights loop, and the rect is wrong"): the rect's
+    CPU-publish arm had failed on EVERY watcher tick since the R3 buffer
+    split — the legacy 5-plane with_b march produced B at the air dims
+    (1920x1024) and foreach_set it into the display-sized background image
+    (3840x2071): a size TypeError, swallowed by the fovea-tick handler with
+    no print. Measured (scripts/probe_cycles_viewport.py, OptiX, 40 s):
+    189 failures in 30 s; no rect ever published (a fresh Cycles session
+    drew black sky — v18 camera rays never see the equirect), rectCam never
+    written (an EEVEE-then-Cycles session kept the EEVEE basis: the rect as
+    a flat quad in the old view direction), and the four air planes were
+    foreach_set + tagged before the failure ~6x/s — every tag bumps the
+    image's depsgraph update count, Cycles re-adds the texture, the world
+    shader re-syncs and the light manager rebuilds its importance map:
+    "Updating Lights" without end. Fix: with_b is False on every path; the
+    Cycles viewport publishes like F12 (LUT air pair at air dims + the BG
+    pass at display dims, film-multisampled by Render Samples). After: rect
+    live from the first tick, publish 0.33-0.38 s (16 samples at 3840x2071),
+    the depsgraph silent in a still view for 20 s, ONE publish (earth +
+    world + 5 image tags) within a second of a 35-degree yaw, then silent
+    again. The tick handler now prints a failure once per distinct message.
+    Blender facts that bound the Cycles path (source, 2026-09-05):
+    Cycles samples Image datablocks through BlenderImageLoader =
+    BKE_image_acquire_ibuf, the CPU ImBuf only (never our GPU textures);
+    the loader's equals() compares the image's runtime update_count, which
+    graph_id_tag_update bumps on ANY tag of an Image ID — so pixels alone
+    are invisible and every update_tag is a re-upload; the world shader
+    re-syncs on a World/Scene/Camera recalc (image tags reach it through
+    the image -> nodetree -> world relation), and its VIEW_LAYER Attribute
+    nodes (rectOn / rectCam0..2 via the objects[...] RNA path) are
+    CONSTANT-FOLDED at that sync — an object tag alone never refreshes
+    them, the image tags of the same publish do; the world MIS map is
+    1024x512 by default (Environment Texture nodes size it, our Image
+    Texture nodes do not). Blender's own Sky Texture: Cycles bakes a
+    512x128 (Nishita) texture on the CPU into an ImageManager slot
+    (SkyLoader, re-added when node inputs change) and samples it in SVM by
+    direction; EEVEE precomputes the same pixels per material compile and
+    binds them as a material-owned texture (GPU_image_sky, linear /
+    repeat-x / extend-y). Nothing of that is reachable from Python except
+    what PA2 already does: Image datablocks + update_tag. The with_b
+    build went the same night (next bullet). Left over: a Cycles view
+    move shows the stale rect (directionally registered) with v18 black
+    outside it
+    for up to the 1 Hz publish gap — a Cycles-only equirect fallback for
+    camera rays is the candidate if that reads badly in the field.
+
+- with_b build removed (2026-09-05, night; user: "remove the with_b
+    build then"): the 5th render target, the E3 celestial splice
+    (`_CEL_COMPOSE` / `_CEL_ANCHOR`), the star/moon sampler set
+    (`_SAMPLERS_RECT`), the compute publish's 5-target branch, the CPU
+    ground fold of the legacy publish and the `with_b` parameters of both
+    shader builders. Every rect build is 4-MRT air-only; the compiled key
+    is `(shader_key, split, lut)`. The compute prelude no longer declares
+    FragBackground and the main template lost its store placeholder.
+    Verified: suite green, probe_refraction's rect builds compile,
+    probe_cycles_viewport unchanged (publish, quiet still view, one
+    publish per move), probe_dirty_images (EEVEE viewport, F12, save).
+
+- Cloud pass census (2026-09-05, night; user: "make the clouds pass
+    faster, taking KSA as a reference"; `scripts/probe_cloud_perf.py`,
+    1920x1080, sun 20 deg, 61% cloud pixels, Normal, fenced medians):
+    full-res cloud pass 52 ms; the four light samples 38 ms of it (4 -> 2
+    samples 33 ms, 4 -> 1 24 ms: each sample is a whole weather + media
+    evaluation, exactly KSA's GetDensityToLight); the in-pass 25-step
+    godray march 11 ms; half the view steps (140 m + 0.012/m) 23 ms; the
+    shape volume size (64 vs 32) nothing. The interleaved low pass is
+    5.1 ms for 1/9 of the rays — the per-ray efficiency is back (the 5-7x
+    of K3 was the tricubic tap). And the SHADOW VOLUME rolled a slice
+    band every round whatever the scene did: 6.7 ms of a 17 ms
+    interleaved round, 11-13 of a 70 ms full-res one — KSA rolls because
+    everything in KSA animates. Landed: the roll is gated on a signature
+    (cloud clock, sun at ~0.3 deg, origin at 500 m inside its 5 km cell)
+    compared at cycle boundaries; a still scene rolls nothing, a moving
+    one rolls as before and settles within two cycles; the clock left the
+    warm-bake key (animated clouds re-baked the whole volume every round);
+    the published frame rows follow the content instead of the live
+    camera. After: interleaved round 17.2 -> 10.0 ms, full-res 70 -> 43,
+    shadow volume baked in 0 of 6 still rounds, 6 of 6 under a stepping
+    sun, 9 of 10 after it stops (the cycle it interrupted plus one).
+    Tried and REVERTED, both measured slower on the RTX 4080 (register
+    pressure in a kernel this size beats the taps saved): a weather cache
+    reusing the anti-tiled tap within a quarter texel (exact, rel95 0.000,
+    yet 37.6 -> 48.5 ms) and lite light samples (coarse volume, no
+    turbulence, expected detail: 55 ms, and L rel95 0.59 — a look change).
+    Also measured and left: 12 instead of 25 godray steps in interleaved
+    rounds saves 0.45 ms of a 10 ms round for a 3-point P95 cost.
+    FINDING: the Clouds quality ladder (`_QUALITY_CLOUDS`: cap, min/max
+    step, growth) feeds only the retired house march — the KSA lanes
+    (`ksa_step_initial` 70 m, `ksa_step_factor` 0.006, 4 light samples)
+    ignore it, so Potato..NASA change the cloud march cost by nothing but
+    the shape volume size; wiring the ladder to the KSA lanes is the next
+    cost lever (half the steps = 2.2x), and the light-sample count is a
+    look parameter (Jensen: fewer samples read brighter), not a free one.
+    Structural KSA gap left: its density is ~5 taps of light ALU per
+    sample, PA2's ~10-15 taps with the anti-tiling, skew and chart math —
+    the per-evaluation ALU is where the remaining factor lives.
+    Ladder wired (same night, user): `_QUALITY_CLOUDS` carries the KSA
+    base step + growth (Potato 280/0.024, Low 140/0.012, Normal 70/0.006
+    unchanged, High 50/0.0042, NASA 35/0.003), matched for the Custom
+    readout like the legacy columns; the six KSA lanes joined
+    `_CLOUD_KEY_SUNPROPS` so a manual edit re-marches at once.
+
+- Ground check (2026-09-05, night; user: "check the ground shader since
+    the atmosphere lut changes"; `probe_lut_rect.py` grew ground-row
+    metrics for S, T, SHADOW, INDIRECT and the composed B, and a march8
+    comparison): the LUT's own ground inputs are right — T at the ground
+    0.05% P95, S 2.2% clear (absolute 1e-4), SHADOW bit-identical (the
+    ground sun-transmittance and cloud-column arm carries no LUT
+    conditional). The composed ground read 11% dark clear and 28% under
+    clouds — but the production 8+8 march read exactly the same, through
+    INDIRECT: the ambient bands atlas re-baked at the viewport's
+    `atmosphere_steps` (its dep key carried the knob), and at the Normal
+    tier's 8 view steps the bands came out 21-28% dark against the 64-step
+    bake (ref [3.19 4.17 6.45] vs [2.51 3.16 4.67]) — the same 52%-P95
+    under-convergence the 8-step sky has, inherited by every ground pixel
+    while the LUT sky itself is converged. Fix: `_ensure_ambient_lut`
+    bakes at fixed 64 view + 32 MS steps (the reference bake of the parity
+    probes) whatever the tier, and the knob left its dep key. After:
+    INDIRECT identical across march8 / LUT / reference, B[ground] 0.05%
+    P95 clear and cloudy; and the sky parity moved with it — clear 0.50% ->
+    0.37%, clouds 14.7% -> 8.8% P95 — the sky-view producer's ground
+    bounce and the cloud ambient read the bands too.
+
+- 1:1 cloud composite (2026-09-05, night; user: "what if I want 1.0x
+    upscaled clouds on top of 0.5x atmosphere?"): the pair marches at
+    display res, but the air pass composites it into S/T at the AIR res,
+    so the world showed clouds at the composite's resolution. The 1:1
+    background compose — the stage that already hands the world a per-
+    pixel correction over its plain bilinear S tap (the horizon verdict)
+    — now carries the cloud edge too (`gcAir1x`, ground_compose.frag):
+    from the four air texels under the footprint it recovers the clear
+    air the pass folded (S_i = L_i + Sair_i Tc_i, the pair tapped where
+    the pass tapped it, reprojected through the same clh rows on air
+    draws) as one verdict-weighted quotient, rebuilds the composite with
+    THIS pixel's cloud, and B carries (that - plain); T for ground and
+    celestials takes the same recovery; an opaque or cloud-free footprint
+    keeps the plain gather. Viewport only (renders keep the multisampled
+    air-res composite: the pair is one sample, the planes the sum);
+    knobs.z flags it, slots 24/25 carry the pair. `probe_cloud_1x.py`
+    (1920x1080, 0.5x air, 60% cloud, world-equivalent S + 64 B against
+    the same round at 1.0x air): cloud edges rel95 0.53 -> 0.012, cloud
+    pixels 0.34 -> 0.20, clear sky next to clouds 0.17 -> 0.07; compose
+    0.5 -> 0.6-0.9 ms. Probe lessons: outside the tick the BG compute
+    twin must be pre-warmed or the compose bails silently (B blank, every
+    config identical); and the FIRST configuration of a run is the
+    fastest — a 20 ms "cloud pass slowdown" that tracked the pair binding
+    across three runs vanished when the configurations were reordered.
+
+- Ground atmosphere reflection from the LUT (2026-09-05, night; user):
+    `gcSkyReflect` marched the reflected sky 6 steps x 3 directions per
+    ground pixel (coarse HG phase, Chapman airmass, the Psi MS band). Now
+    a SURFACE generation of the sky-view LUT (`\_ensure_sky_view_lut(...,
+    surface=True)`: the chart at the ground point under the camera,
+    straight, keyed on a 1 km ground track + the sun) publishes one
+    composed plane (`sky_view_compose_driver.glsl`: every texel composed
+    with the exact phase for its direction) that the compose taps once
+    per ground pixel through a twin of the lib's chart at viewHeight = R
+    (slot 26, knobs3.x = the generation's scale; 0 = the march). Exact for
+    every ground point at any camera altitude — a camera-altitude atlas
+    is the wrong sky for a ground point 10 km below it. Viewport and
+    renders. `probe_surface_reflect.py` (reflections on, 15 deg down
+    toward the sun): composed B within 5.5% P95 of the analytic march,
+    means 2% darker, compose 3.2 -> 3.0 ms; the composed plane finite,
+    the aureole at its max. (Found and fixed on the way: sky_luts never
+    imported `time`, so its atlas-pack failure print raised.)
+
+- **Horizon line at coarse air scales — the film paired past
+    corrections with today's plane** (2026-09-05, user screenshot at
+    0.25x Atmosphere Resolution: a dark line under the horizon). The
+    law of 2026-09-04 stands (B carries verdict-gathered S minus plain
+    S, the world's bilinear tap cannot know the boundary), but the BG
+    film averaged that correction across rounds, and at 4-px air texels
+    the jittered march flips a boundary texel between sky and ground
+    round to round: a round where the last ground texel came out SKY
+    wrote a −3..−5 correction into every ground pixel under it, and the
+    film kept feeding it to rounds where the texel was ground again.
+    Measured (`probe_air_scale_artifacts.py`, world-equivalent
+    S_bilinear + 64B across the horizon, 0.25x): rows 1094-1097 at 1.15,
+    0.74, 0.32, −0.09 against a 1.3 ground, then 1.13, 3.13, 5.18, 5.76,
+    6.15 (overshoot) above. Diagnostic lanes in the compose
+    (PA2_BG_LANE comp / free / gnd: the current correction alone, the
+    correction-free film mean, the film-averaged ground-verdict
+    fraction) showed the second half: at the horizon row the film's
+    ground fraction was 0.69 but the correction was applied with the
+    LAST round's single verdict (world 0.95 in a 1.3 row; the sky
+    verdict's would have read 6.3). Fix, `ground_compose.frag` film
+    tail: the history holds the correction-free mean plus the ground
+    fraction (packed as count + fraction/2 in the RGBA32F alpha), and
+    the output adds `mix(compSky, compGnd, fG)` with BOTH corrections
+    evaluated against the CURRENT plane (the other verdict's gather runs
+    only where 0 < fG < 1, a pixel within the jitter of the 1:1
+    horizon). Result: 1.0x 1.46 → 4.08 → 5.52, 0.5x 1.37 → 4.09 → 5.52,
+    0.25x 1.32 → 2.63 → 4.05 → 5.51 — a monotonic antialiased step,
+    no dip, no overshoot.
+
+- **Object cut halo at coarse air scales — inpaint per side (graph
+    v27)** (2026-09-05, same screenshot: a gap around the cube). The
+    composited image is not capturable in a scripted session under
+    Vulkan (screenshot, a POST_PIXEL framebuffer read, an offscreen
+    draw_view3d, render.opengl and an F12 with compositing all came
+    back black: the EEVEE beauty is black by design in compositor mode
+    and the composite lives only in the viewport compositor), so the
+    hybrid cut was TWINNED in numpy over the live planes with the
+    cube's silhouette from its projected hull (RGBToBW luminance, the
+    square Dilate/Erode window, the band gate, per row through the cube
+    centre / a sky row 300 px up / a ground row 300 px down). Facts:
+    the air pass stores a COVERAGE MIX of the cut and full columns per
+    texel (`pa2ColOut = mix(col, colCut, pa2GeoCov)`), so no verdict
+    gather can un-mix a straddling texel; the shipped ±2 px min/max
+    recovery reads −46% at the silhouette on a sky row at 0.25x (−36%
+    at 0.5x, −25% at 1.0x in the 1-px AA band), fading over ~8 px: the
+    gap. Scaling the window by the air fraction (v26, built and
+    measured the same day, never shipped) closes the sky-row gap (−1%)
+    but the MAX of S across the horizon rows is the sky glow, 27x the
+    ground's: +554% around an object 6 px under the horizon. v27 fills
+    each side by INPAINT from its own clean pixels instead: zone =
+    fractional EEVEE alpha dilated by 2 display px per air texel,
+    `SetAlpha(plane, valid_side)` → `Inpaint(zone + 2)`, valid_sky =
+    outside the zone and alpha < 0.5, valid_obj = outside and alpha ≥
+    0.5; the band mix keeps the plane outside the zone. Twin: sky row
+    −1..−4% (the row's own gradient; 5.4% max), horizon row 6.5% (the
+    pre-v27 figure was 8%), identical at 1.0x. `refresh_values()`
+    pushes the zone radius and the three fill distances from the S / B
+    image size ratio (sig-guarded). Real-viewport verdict pending the
+    user (no capture route).
+
+- **The probe's own cloud pass** (2026-09-05, user: "give the probe
+    its own cloud pass, as the rect has"). The equirect pair mirrors the
+    rect pair over the equirect driver: `_eq_split_wanted` (split iff
+    the build carries USE_CLOUDS; `_EQ_SPLIT_FORCE` for probes),
+    `_draft_cloud_compute_shader_cached` (PA2_CLOUD_PASS compute twin),
+    `_draft_compute_shader_cached` → from_tex (its cache carries the
+    split flag), `bake_now` builds the fragment pair
+    (`_STATE["eq_cloud_shader"]`), and `_eq_cloud_pass` runs the pass
+    into a cached RGBA16F triple at probe dims ahead of every sky pass
+    (`_draft_direct` compute / fragment / reduced-draft branches,
+    `_accum_pass_gpu` both branches, `_render_mrt(pre=)` for the
+    synchronous readback path), appending (uCloudL, uCloudT) to the sky
+    pass's extras; the tap is identity (clh0.w = 0 in every probe UBO).
+    The aerial-LUT extras bind on the cloud pass too (a LUT build
+    composites each layer at its centroid). `probe_equirect_cloud_pass.
+    py` (1024x512, clouds, sun 20°, LUT on): parity S rel95 0.05% / T
+    0.07% / INDIRECT + SHADOW identical; forced bakes 40.2 / 43.0 / 40.8
+    ms split vs 40.2 / 39.1 / 39.5 inline; cold compiles (salted
+    source, inline first): inline frag 4.64 + compute 4.67 s = 9.3 s,
+    split from_tex 1.33 + pass 2.55 (frag) + 1.35 + 2.57 (compute) =
+    7.8 s. No runtime change; the sky program is the clear-sky build.
+    Probe trap recorded: a bake right after a cold compile stall lands
+    in the image-churn window (1 ms bakes, stale planes) — the probe
+    waits 30 s after invalidating when cold.
+
+- **KSA density model** (2026-09-05, user: "lets bake the weather per
+    layer as ksa does, and lets also do the KSA weather/coverage ... use
+    the shape noise like ksa ... mirror the ksa approach completely,
+    then we can go our way; discard everything rain related"). The
+    census answer to "why is KSA real-time and PA2 not": the evaluation
+    COUNT per pixel was already KSA's (step schedule, 4 + 1 light
+    samples, 3x3 interleave), the cost of ONE density evaluation was
+    not — 3 authored-map taps + 1 LUT + 3 R8 Worley taps there, against
+    the chart projection, the Keinert lattice (log/pow/atan, 4 x
+    sin/cos/sqrt), 1-8 anti-tiled weather taps, vec4 pow, three Fewes
+    sculpts, the rain branch, 2 turbulence taps and 4-8 RGBA16F volume
+    taps here, and the light march repeating all of it 4x per lit step
+    (73% of the pass; the kernel register-bound, so caching inside it
+    made it slower). Built as a compile variant, PA2_KSA_DENSITY
+    (`cloud_density_model`, KSA default / PA2 procedural):
+    `sampleCloudWeather` / `sampleCloudMedia` twins in the model lib
+    (helpers before `sampleCloudWeatherWd`, twins after the procedural
+    media sampler, the ground-AO column and the analytic shadow column
+    have twins too). Weather: `weather_bake_driver.glsl` (compute,
+    2048² RGBA16F) runs the PROCEDURAL `sampleCloudWeatherWd` (the
+    refactored weather returning its pre-sculpt coverage) at each
+    layer's mid altitude over a gnomonic chart about the sub-camera
+    direction (cl_grid = n.xyz + half-extent; east from a fixed
+    reference so bake and march agree), half-extent = 1.15 x the
+    ground-arc horizon of the highest top plus the camera's (40-600 km;
+    ~360 km here = 350 m/texel); keyed on the cloud param key WITH the
+    clock, the camera's 10%-of-extent chart cell and the extent, ~1 ms
+    a bake. Vertical profile: the Fewes sculpt of the baked coverage,
+    analytic (KSA's LUT would have been a 3rd sampler). Noise:
+    `worley_gen_driver.glsl` = KSA's GenerateWorleyNoise (their
+    tileable Cellular3D, 8 octaves, persistence 0.57, inverted,
+    range-stretched on the CPU), 128³, four mean-pooled mip levels
+    stacked along z in ONE volume (each padded by a wrap texel for the
+    EXTEND sampler), R16F (the GPU module only takes FLOAT buffers — R8
+    would halve it again); tapped through KSA's octahedral 3-tap
+    anti-tiling at the analytic pixel-angle mip, FLOORED, one level per
+    tap; `ApplyErosion` (max depth 0.65, Shape Amount = edge sharpness).
+    NO NEW SAMPLERS: the bake rides the iChannel0 slot and the atlas the
+    uCloudShape3D slot — the procedural slots a KSA build never reads —
+    through `_cloud_channels_live()` at the three bind sites
+    (`_draw_pass`, `_rect_compute_pass`, the shadow-volume and density
+    bakes), so every builder and call site is untouched and the sampler
+    budget (30 of 32 in the fullest rect build) stays. The bake binds
+    the procedural inputs directly. Measured (`probe_cloud_perf.py`
+    PA2_CLOUD_MODEL, 1920x1080, 61% cloud px, Normal, same session
+    order): full-res cloud pass 13.2 ms (KSA) vs 69.2 median / 44.9 min
+    (procedural); interleaved pass 3.3-3.6 vs 6.1-20.0; the interleaved
+    round is now the resolve (5.5 ms). Equirect forced bake 9.3 ms vs
+    ~40. Same coverage field (61.2 vs 61.4% cloud px, T 0.40 vs 0.41);
+    L mean 11.0 vs 19.1 — KSA's dark-edge term takes the sculpted
+    coverage as the depth proxy where the procedural DP was the
+    post-density profile (0.7 vs ~1 in bodies), and KSA balances its
+    darker MS with a per-type brightness and CLOUD_BRIGHTNESS 8. The
+    look is the user's call from here ("then we can go our way").
+
+- **The chart must not follow the camera** (2026-09-05, user: "when
+    the camera moves the clouds seem to shift around"; "the clouds do
+    not reach the planet end"). First cut: the bake re-anchored on the
+    LIVE camera direction at every re-bake, and the half-extent followed
+    the camera altitude (sqrt(2R h): ~200 m of extent per metre near
+    the ground, quantized to 5 km) — so a few metres of climb re-baked
+    the coverage onto a grid that had slid with the eye: the clouds
+    swam. And the 600 km cap ended the coverage in a square from orbit
+    (KSA never has this: a planet-wide coverage map + sphere-wide
+    detail tiling). Fix in `_ensure_ksa_density`: the anchor is the
+    CENTRE of a fixed cell on the sphere (10% of the extent, the
+    quantized n renormalized), the camera altitude enters the extent
+    only above 500 m and then on a x2 ladder, the extent snaps to a
+    x1.25 ladder, no cap short of 4000 km. `probe_cloud_model_view.py
+    PA2_PROBE_WALK=1`: the chart row is identical through 20 m, 30 m up,
+    500 m and 2 km moves (no re-bake); 400 km up re-anchors once at a
+    2220 km half-extent (2.2 km texels — from orbit a texel is a few
+    pixels; supersample the bake if it ever reads speckled). The same
+    probe's per-bake sky rel95 at the SAME spot is 11%: the KSA march's
+    frame dither (ray + light seeds), not the chart.
+
+- **Shadow volume: the KSA audit and the resample** (2026-09-05, user:
+    "cloud shadow volume is flickering when camera moves", "can you check
+    if the shadow volume matches ksa?"). Against `ShadowVolume.comp` /
+    `ShadowVolume.glsl` / `ResampleVolumes.comp`: SAME dual-paraboloid x
+    altitude mapping (Zink), R16F, density/100 storage, tricubic B-spline
+    in 8 bilinear taps (byte-for-byte: the `svsample` shared block now
+    lifts it into the resample), 40-step sun march through the cloud
+    band, 3x4 ambient directions x 7 samples x 0.1 capped at 4x the band
+    thickness, amortized `sliceToUpdate`, per-layer accumulation
+    (their first-pass clear = our one march over all layers). DIFFERENT
+    by design: our anchor is the sub-camera SURFACE point (theirs the
+    camera; ours keeps the band in the live hemisphere from altitude),
+    our slice axis is altitude Z (theirs the paraboloid Y strip), our
+    build noise is the KSA Worley at mip level 2 (their fixed mip 3), we
+    add the rim trust fade and a trilinear twin for the godray taps
+    (they tap tricubic everywhere), and the out-of-band sun projection
+    is theirs (Godrays.glsl). MISSING until tonight: the RESAMPLE. Their
+    volume never lags its frame — `ResampleVolumes.comp` re-projects both
+    volumes into the new frame whenever the camera moves. Ours moved the
+    frame rows in 500 m jumps at a cycle start (the morning's roll
+    gating) while the slices caught up over six rounds: the flicker.
+    Now `sv_resample_driver.glsl` (compute, 8 push-constant rows = old +
+    new frame, the bake's own ray-sphere rule, tricubic taps of the old
+    frame, ping-pong textures) runs before every rolling refresh whose
+    frame moved (> 1 m / 1e-4 basis), the published rows always describe
+    the content, and the origin left the whole-volume-bake key (5 km
+    cells). SECOND ROUND (same evening, user: "the lighting on clouds
+    still flicker from the shadow volume"): a frame that follows the
+    camera every round is resampled every round — each tricubic pass
+    blurs the volume a little and the roll re-sharpens 8 of 48 slices a
+    round, so the far light term pulsed with a six-round period while
+    moving. The anchor is now the centre of a fixed 1 km cell on the
+    sphere (the weather chart's rule; the basis from the quantized
+    direction): inside the cell the frame, the content and the rows do
+    not move at all and nothing rolls unless the sun or the clock move;
+    a cell change resamples once and runs one refresh cycle. KSA's CPU
+    side is not in the sources, so whether they threshold the resample
+    is unknown — the physics is: the volume is a function of world
+    position, the paraboloid only a parametrization, and re-projecting a
+    parametrization every frame buys nothing but blur.
+
+- **Object shadows on clouds** (2026-09-05, user: "make the 3d objects
+    drop shadow on clouds"). KSA (`RaymarchCloud.comp`): `sunToCloud-
+    Transmittance *= getSunShadowFiltered(terrainShadowUbo,
+    averageCloudPosition, ...)` — ONE PCF tap of the terrain cascade at
+    the transmittance-weighted centroid, scaling the whole sun-driven
+    colour. PA2's caster sun-depth map (`caster_shadow_lib.glsl`,
+    `pa2CasterShadowSoft` = 4 jittered taps) already shadowed the air
+    march per sample (godrays) and the ground; the retired house cloud
+    march had the per-sample tap too and the KSA port dropped it. Now
+    `march_cloud_segment_ksa` multiplies `scatteredLight` (the sun-lit
+    single + multiple terms; the sky ambient stays) by
+    `pa2CasterShadowSoft(ro + rd * t)` per LIT step under
+    `PA2_AIR_CASTERS` (rect builds only — the probe's role law) and the
+    runtime bit6 `PA2_RT_CASTER_CLOUDS` (`shadow_casters_clouds`, no
+    recompile). Per sample rather than KSA's centroid: a caster's shadow
+    cuts INTO the deck with the correct volumetric edge instead of
+    dimming the pixel flat; 4 texel fetches of a 2D map per lit step next
+    to 15 volume taps. `probe_caster_clouds.py` (a 2 km cube placed on
+    the sun ray 2 km sunward of the deck over the camera, sun 25°, the
+    view straight up): with the toggle on the cloud radiance under the
+    cube reads 0.23x the toggle-off plane, 91% of the cloud pixels
+    darkened by more than 30%, 61% by more than 60%, the 5th percentile
+    ratio 0.09 (the sky ambient stays, as designed). A first run with a
+    600 m cube showed nothing: its shadow fell on clear sky (31% cover),
+    a reminder that the probe must aim the shadow at cloud. The toggle
+    rides `_CLOUD_KEY_SUNPROPS` so a flip re-marches while still.
+
+- **Scene lamps on the clouds** (2026-09-05, user: "add also blender
+    light source interaction with clouds"). No KSA reference (their
+    clouds know only the sun). The Scene Lights arc (2026-09-03) put
+    Blender Point/Spot lamps on the ground and in the air with EEVEE's
+    light law through `scene_lights_lib.glsl`, included by the DRIVERS
+    (after the libraries). The cloud march lives in the libraries, so
+    the light LAW (count / window / spot / point) became a guarded
+    shared block (`lightbase`, `#ifndef PA2_LIGHT_BASE`) that
+    `_assemble_fragment_source` splices ahead of the libraries next to
+    the caster helpers; the drivers' own include then skips it and the
+    ground compose (no atmosphere blob) still compiles it. In
+    `march_cloud_segment_ksa`, per lit step: `pa2KsaLampStep` = per lamp
+    EEVEE's volume-light irradiance (`color*power/4pi * volume factor *
+    Yuksel * spot * window`, the air's exact form), the KSA phases for
+    THAT lamp's direction (per step — the sun's are per ray), and a
+    two-sample density march toward the lamp over min(distance, light
+    window) for `exp(-d) * phD + BeerMS(d) * phI * msEdge`; accumulated
+    with the integration weight (and the early-exit tail), added as
+    `lampColor * PA2_KSA_BRIGHTNESS` without the sun transmittance.
+    Compile toggle PA2_LIGHTS_CLOUDS (the Scene Lights property; pinned
+    0 in the LUT / SV / weather bakes), runtime lane `lt_cfg.w` (Light
+    Clouds, `scene_lights_clouds`, in the light key). Lamps beyond their
+    EEVEE volume influence sphere skip before any tap.
+
+- **Refraction shimmer split** (2026-09-06, user: "separate the shimmer
+    into two parts", "the near shimmer needs to be part of the refraction
+    pipeline... like 1 km from the camera"): the world-space tier's
+    per-step kicks, Eddy Size and the camera-side tilt retired;
+    **temperature masses** scale G(h) inside `pa2RfPrepare` (one volume
+    tap per sub-step below 4 × 1.5 km, `rf_shim2`, amount = RMS fraction
+    of the gradient, default 1, clamped at 0); the **near shimmer** kicks
+    at eight fixed stations across the first kilometre of the trace walk
+    (gradient of the field by central differences over ±1/24 period,
+    `_turb3d_diff_rms`; camera-relative positions in the walk plane's
+    terms; the field slides at Boil Hz/12 and rides the updraft; ψ/ψ_S
+    out-of-plane), star scintillation `pa2CelScint` in the rect compose
+    (`rf_wind.y`, airmass-scaled lognormal, chromatic at the horizon).
+    Default amount 1 → 0.3 (1′ over 3′ cells folded the mapping and tore
+    the disc; `probe_shimmer_view.py` shows the limb from the B plane).
+    Traps: per-sub-step kicks streak rows (the schedule's step count
+    changes with elevation); fp32 world positions snap 0.87 m eddies.
+
+- **Mirage horizon hole** (2026-09-06, user: "hole peeking through
+    transmittance and earth horizon... where the real horizon would
+    be"): the rect LUT arm's atlas-vs-aerial choice took the STRAIGHT
+    shell chord, so an inferior-mirage reflection (a walked EXIT from
+    below the geometric horizon) fell to the aerial's ground column — a
+    flat grey T under the sun = the white band. The walk's verdict
+    (`g_pa2RfKind`) chooses now, and such rays take the horizon ray's
+    atlas column (the atlas rows a dozen arcminutes down are ground
+    columns 3–5′ apart). `probe_horizon_hole.py`: 18 white px → 0; the
+    horizon lift measured 2.0′ (60 m) / 2.8′ (70 m), inferior mirages
+    lower it 8–13′.
+
+- **Mirage sun sliced into bands** (2026-09-06, user: "I think it might
+    be the raymarch steps" — it was): the walk's shell-top exit clip was
+    a linear ratio on the full step's midpoint rate + the commit used the
+    unclipped rates: 6″/180 m lost on the last step, ±3″ ray-to-ray,
+    ×30 under a duct = 2′ slices. Fix in `pa2RfPrepare` + the twin: the
+    top crossing's quadratic, clipped steps recompute their midpoint
+    rates, Simpson over the step's gradient; MAX_STEPS 512. Standard air
+    jitter 13.6″ → 1.3″ (Normal); GPU-twin bend agreement 0.36″. The
+    user's scene reproduced in `probe_horizon_hole.py` (eye 2 m, +5 K
+    50–60 m, sun −0.52°, strength 1.2): sliced before, smooth after.
+
+- **Shimmer under a duct** (2026-09-06, user: "the bands reappear when
+    shimmer is added"): the near field's sub-step cap re-phased the walk
+    per row (twin 0.12″ → 1.68″ with a zero field) and the masses
+    point-sampled a 3 km field per 3–8 km step (7.9″) while scaling the
+    duct's own gradient (39″). Both are fixed STATIONS now: the near
+    field kicks every station inside a step; the masses kick the
+    standard-gradient offset A·n·e^{−h/H}·g₀ (lane rf_shim2.w = g₀ ×
+    strength) integrated over half-cell stations (≥ 1.25 km), never
+    inverting the local gradient. Twin: duct 0.6″, clear air 0.2″; the
+    masses' wander is ~0.2′ across azimuth at amount 1. Then (user: "the
+    masses need to change the temperature, so the IOR changes"): the
+    masses are a temperature field, Masses ΔT (K, default 2); δn = N δT/T
+    and the stations kick by δn's transverse gradient (central
+    differences, vertical + sideways, ψ/ψ_S), lane rf_shim2.x = 2 N ΔT/T
+    × min(st/c, √(st/c)) / RMS. Twin with the real volume: 2 K / 3 km →
+    0.12′ sideways, 0.01′ vertical; 2 K / 1 km → 0.45′ sideways. Then
+    STRATIFIED (user: "more flattened, the coordinate the normalized up
+    vector"): the field's frame = the camera's up + a fixed horizontal
+    pair, vertical cell = Mass Thickness (300 m), horizontal = × Mass
+    Aspect (20), lane rf_shim2.w = 1/horizontal period (= on); 100 m
+    isotropic masses had torn a sub-duct sun. Design doc §4.6.1 / §4.7.1
+    written once the Mac's celestials commit (e16e734) landed.
+
+- **Spectral dither, two fixes** (2026-09-06): the BG compose never
+    bound uBlueNoise (only the ground draw did) → one wavelength per
+    pass for every pixel, the sun swept through the spectrum; bound at
+    both `_rect_background_rt` sites. T(λ) from the bands = a piecewise
+    power law in log λ (the free quadratic in λ⁻⁴ bent up at the blue end
+    with aerosols → violet far-blue samples, banded sun).
+
+- **Mirage layer waves** (2026-09-06, user: "build the layer undulation
+    on the Mirage Layers block, the physical way"): an internal
+    gravity-wave train (dominant + two companions at ±25/35°, one
+    interfacial phase speed √(g ΔT/T z_base) from the layer itself)
+    displaces the profile above the ground layer in every rect walk,
+    `pa2RfWaveEta` + `h − η` at the three table reads. Knobs Waves (m) /
+    Length (m) / Dir (°) on the Mirage Layers block; lanes rf_cfg2.w,
+    rf_shim2.z, rf_wind.w, rf_shim.y (three constants moved into the
+    shader to free them). Sub-duct sun stacks into rippled bands. Suite
+    86.
+
+- **Air masses retired** (2026-09-06, user: "the waves do their job"):
+    knobs, lanes (rf_shim2.x/y/w free), the walk's mass stations, the
+    twin's `masses`, tests and probe sections removed; the near shimmer
+    and the layer waves remain. Suite 85.
+
+- **Heat blur + internal gravity waves** (2026-09-06 evening, user:
+    "more like the heat blur" / "internal gravity waves ... double check
+    the math and lets implement"): the BG compose tilts every film
+    sample's ray by a Gaussian of σ = Blur × Kolmogorov's sub-cell share
+    (2.5× the ripple at 3′) × the near amplitude (`pa2RfBlurDir`,
+    blue-noise Box-Muller, lane rf_shim2.x); the layer waves are six
+    internal gravity waves with ω = N k_h/√(k_h²+m²), N from the layer's
+    own lapse, a Vertical wavelength knob, Gain + Steepness (Gerstner
+    orbit, optional) packed on rf_wind.w, N/m on rf_shim2.y/w
+    (`gravity_wave_eta` twin, probe section 6). The proposal's density
+    warp ρ(z − ξ) is the tracer form, 10× too strong for ρ and T
+    (design-refraction §4.7.2 rev. 2). Suite 86. Then 1-D in height
+    (user: "mapped to the planet's up axis"): ξ(h, t) at the camera's
+    phase for the whole ray, Dir retired, rf_shim.y free (rev. 3); then
+    along the line of sight, ξ(s, h, t) (rev. 4: a uniform lift did
+    nothing visible — "the eye moved"), Vertical default 200 m, an
+    overturning guard on the amplitude.
+
+- **Shimmer on turbulence physics** (2026-09-06 late, user: "a more
+    physically accurate way"): a Kolmogorov phase screen in uBlueNoise.y
+    (FFT bake), the walk's eight stations reading its footprint-averaged
+    tilt × √(C_n²(h) Δs) with C_n² ∝ h^(−4/3) from the Cn² knob, windows
+    drifting with the log-profile wind (Wind / Wind From knobs) and the
+    updraft, the heat blur = the sub-footprint tilt band 1.95 I Δκ^(1/3)
+    gathered along the whole low path (design-refraction §4.6.3).
+    Amount / Scale / Boil retired. Suite 88.
+
+- **Spectral dispersion dither** (2026-09-06, user proposal): the rect
+    compose's celestial arm draws one wavelength per pixel per film
+    sample (blue noise .w + the pass shift), walks it with Ciddor's
+    ratio, weights the RGB by Planck × sRGB CMF (mean 1) and holds the
+    three-band convention through T(λ)·T_c/E_c[w_c T] (16-point mean
+    per pixel). One walk per sample instead of three; the film converges
+    to a continuous rim. Step-phase dithering of the walk assessed and
+    declined. CPU twins `spectral_weight` / `ciddor_dispersion_ratio`,
+    unit-tested; suite 85.
+
+#### 23.1 Compile-time census (2026-09-05)
+
+`scripts/probe_shader_compile.py` wraps `gpu.shader.create_from_info` and
+the first draw / dispatch of every PA2 program (fenced). Findings on the
+RTX 4080, Blender 5.2 Vulkan:
+
+- SPIR-V generation is negligible (about 300 ms for all 25 programs).
+    The time is the driver's pipeline build, and Blender's Vulkan backend
+    defers part of it: compute programs build at `create_from_info`,
+    fragment programs pay a first build there (default state) and a second
+    at their first real draw.
+
+- The NVIDIA disk cache serves identical SPIR-V across sessions in well
+    under a second. `__GL_SHADER_DISK_CACHE=0` does NOT disable it for
+    Vulkan, so any "cold" number must come from a source that never
+    compiled before (the bisect probe injects a unique literal).
+
+- True cold costs with clouds on, LUT Atmosphere: rect air compute 15 s,
+    its fragment twin 15 s, the equirect lighting program 14 s (measured
+    while EEVEE's own world compile job held the CPU; 30 s uncontended
+    before the guard), cloud pass 2 s, everything else under 0.2 s. Clouds
+    off: every program together 0.4 s.
+
+- `scripts/probe_compile_bisect.py` on the equirect program: base 30.6 s;
+    the light march stubbed 20.6 s; the cloud arm stubbed 16.5 s; the
+    geometry-cut composite dead 4.6 s; arm + light march stubbed 2.5 s;
+    clouds off 1.2 s. The second inlined instance of the cloud arm and the
+    air march (the coverage cut) is what the driver chokes on, not the
+    cloud model per se.
+
+- Applied: the cut composite is compiled into RECT builds only (opaque
+    bodies clamp the equirect's column up front instead); the probe never
+    taps the scene casters in its air (`PA2_AIR_CASTERS`, rect-only); the
+    Reflections category can march the probe cloudless (`USE_CLOUDS 0`
+    variant, about 1 s) or skip it entirely (Reflection Probe off).
+
+- Open: the rect LUT air build still carries the fallback march and its
+    own cut instance (15 s cold); the fragment twin doubles that. A LUT
+    build without the fallback march and a single-instance cut (record the
+    partial sums at the cut distance during one march) would bring the
+    rect's cold compile to the cloud pass's 2 s class.
+
+- Runtime under the LUT with clouds: the per-draw air pass ran under an
+    EMA hold-off (2x its cost) with the warp bridging the skipped draws and
+    ghosting composited objects; it now runs on every moved draw while it
+    stays under 25 ms (clouds keep their temporal reprojection).
+
+- Object compositing repro (`scripts/probe_viewgeo_aureole.py`, a 4 km
+    cube at 10 km in turbidity-6 air, sun 8 degrees up behind it, casters
+    on, `PA2_AUREOLE_DUMP=1`): the viewgeo depth at the sun pixel is
+    7981 m (correct), and the rect S plane there reads 6.02 with KSA's
+    0.95 aerosol damp in the godray pass against 5.28 with the damp at
+    1.0; the sky 14 degrees off reads 6.3. The unshadowed single
+    scattering at the sun pixel is the aureole (about 15 on a 5.3
+    isotropic background), so the damp leaked 5% of it into every
+    object shadow covering the sun. KSA needs the damp because its LUT
+    stores phase-applied radiance; PA2's planes are phase-free, so the
+    damp was removed (the consumer's per-channel clamp at zero guards
+    over-subtraction). Screenshot luminances were useless for this: the
+    scripted viewport composite carried no cut haze on the object at
+    all (its compositor setup is still to be checked), so the numbers
+    were the cube's own shading. Multiple scattering stays unshadowed in
+    the godray pass (KSA), which keeps a shadowed path at the isotropic
+    floor rather than dark.
+
+- Space view (`scripts/probe_space_limb.py`, camera 2000 km up, the sun
+    just above the limb): `_lut_radiance_scale` rated the sun by its
+    elevation at the CAMERA's horizontal (-40 degrees there) and every
+    generation took the 2^18 night scale. The sky-view atlas is fp32 and
+    survives it; the aerial planes are fp16 and overflow, so ground-hitting
+    rays over the sunlit disc lost their haze toward the sun. The rule now
+    adds the horizon depression acos(R / r), which leaves ground views
+    unchanged (an airliner gains about 3 degrees).
+
+- Air Reprojection Warp: a runtime switch, OFF by default (user verdict
+    2026-09-05): draws the fresh air pass cannot serve keep the planes at
+    the last pose; only the clouds reproject.
+
+- Space view after the scale fix (probe_space_limb.py, sun 12 degrees
+    above the limb, rect S plane, R / G / B): the haze under the limb is
+    back, but the LUT over-reads the analytic reference at grazing
+    ground-hitting rays. 2000 km: half a degree under the limb LUT 11.3 /
+    6.4 / 7.6 vs reference 3.5 / 3.7 / 7.1; one degree 2.5 / 1.3 / 2.1 vs
+    1.5 / 1.1 / 2.0; two degrees equal. 600 km: half a degree 19.3 / 12.0
+    / 13.5 vs 5.6 / 6.2 / 11.9; two degrees 4.7 / 2.5 / 3.5 vs 1.8 / 1.7 /
+    3.5; four degrees equal (0.43). The excess is red-heavy and confined
+    to the first two degrees under the limb: the aerial planes' angular
+    and depth resolution at rays that graze the dense shell (OPEN, the
+    "space views" item). The scripted viewport itself displayed black in
+    BOTH modes from space while the planes held the content; the probe's
+    display side is unchecked.
+
+- Metal field log (2026-09-05, after the review): the sky-view producer
+    and its atlas pack were fragment passes over their own framebuffer and
+    ran inside EEVEE's draw callback from the per-draw LUT arm; Metal
+    refuses the framebuffer exit there and burns a stack slot per pass
+    (four, then the pipeline stood down). Transmittance, sky-view and the
+    pack are compute dispatches now; the whole LUT chain is
+    framebuffer-free, on every backend. The same mid-frame render-pass
+    switch is the suspect for the Vulkan device losses reported since the
+    LUT rect; to be confirmed in the field.
+
 
 ## Atmospheric Refraction — ray-marched, one law for sky, ground and celestials {#refraction}
 
-`design:`{: .label-research } Shipping · every stage landed · amended 06.09.2026 · 03.09.2026 · `docs/design-refraction-2026-09.md`
+`design:`{: .label-research } Shipping · every stage landed · amended 10.09.2026 · 03.09.2026 · `docs/design-refraction-2026-09.md`
 
 **In this document:** [1. What exists today, and why it is "not functional"](#refraction-1-what-exists-today-and-why-it-is-not-functional) · [2. Requirements → design decisions](#refraction-2-requirements-design-decisions) · [3. Physics](#refraction-3-physics) · [4. Architecture](#refraction-4-architecture) · [5. Data, UI, keys](#refraction-5-data-ui-keys) · [6. Stages](#refraction-6-stages) · [7. Verification](#refraction-7-verification) · [8. Risks and known limits](#refraction-8-risks-and-known-limits) · [9. What we take from the references, and where we depart](#refraction-9-what-we-take-from-the-references-and-where-we) · [10. Open questions for the user](#refraction-10-open-questions-for-the-user)
 
@@ -433,8 +2993,18 @@ Three mechanisms cooperate so that a mesh gets aerial perspective up to its surf
 <figcaption>The ground viewer's horizon ray. Refraction is exaggerated for the drawing; the real bend is 34′ at the horizon and the lifted horizon is 10 % further. Everything the design does follows from walking that curve step by step and asking, at every consumer, "where am I and which way am I looking".</figcaption>
 </figure>
 
-Status: SHIPPING (written 2026-09-03 as a design; amended as stages
-land). Every stage has landed in the tree: the LUT generations walk the
+Status: SHIPPING — in 3.0.0-beta and later (written 2026-09-03 as a
+design; amended as stages landed). As built by 2026-09-10, beyond the
+list below: the near shimmer rebuilt on turbulence physics, heat blur
+as fixed TAA-style taps, the mirage layers riding 1-D internal gravity
+waves (Waves / Length / Vertical / Gain / Steep on the Mirage Layers
+block), the optional sub-frame phase dither of the walk, and the tuned
+mirage layer shipped as the default. The temperature-field AIR MASSES
+of 2026-09-06 (their toggle, ΔT / Thick / Aspect, lanes, stations,
+twin, tests) were RETIRED the same day — the layer waves carry the
+structure (CHANGELOG, Removed). §10's questions were settled in the
+field: refraction ships ON with the tuned layer, dispersion ON, the
+inversion as an enum with presets. Every stage has landed in the tree: the LUT generations walk the
 bent path (0381b1a, 11792e8, a6ebfb4); the stage-1 batch — bent view rays,
 shimmer, dispersion, North Offset, presets (adb7553); the shimmer split
 into temperature masses + a near field inside the walk (cec18cd); the
@@ -1007,29 +3577,19 @@ pipeline, not an overlay post-fx glass filter over everything — like
 1 km long from the camera". Two parts, both kicking inside
 `pa2RfPrepare` of the TRACE walk (the providers keep the smooth path):
 
-- **Temperature masses** (the low-frequency part) replace the world
-    tier. A slow scalar field n(p) — the same volume, indexed by world
-    position over 6 × Mass Size (default 3 km), riding the updraft —
-    offsets the STANDARD air's surface gradient g₀ by A·n·e^{−h/H}
-    (H = 1.5 km, below 4H), integrated at fixed STATIONS along the ray
-    (every half cell, at least 1.25 km) and kicked into the direction
-    from the sub-step holding them: Δel = Σ A·n·e^{−h/H}·g₀·Δs·cos el,
-    never past inverting the local gradient. Two forms that did not
-    survive the day (user: "the bands reappear when shimmer is added"):
-    scaling the LOCAL gradient by (1 + A·n) — a +5 K duct is 20× the
-    standard gradient and ±100 % of it tore its fold apart (39″ of exit
-    jitter) — and point-sampling the field once per sub-step, which
-    aliased a 3 km field on 3–8 km steps and jumped with the step count
-    (7.9″ under the duct, 2.3″ in clear air; stations: 0.6″ / 0.2″).
-    This is what "eddies of 3 km" approximated with random kicks — the
-    gradient itself varying along the path — but integrated smoothly in
-    the vertical plane. Amount = the RMS fraction of g₀ (1 = the
-    standard gradient wanders by its own size: about a fifth of an
-    arcminute of horizon wander across azimuth, a few arcseconds across
-    elevation — the smooth integral cancels most of what the aliased
-    random walk showed as 0.8′). Lanes `rf_shim2` = (A/σ_vol, 1/period,
-    H, g₀·strength). Independent of the quality tier; off with Ray March
-    off (no walk).
+- **Temperature masses — RETIRED the same evening** (user: "do we need
+    the air masses now that we have waves? the waves do their job").
+    Three forms were built and measured in one day: a gradient scale
+    (1 + A n) of the local table value (tore a duct's fold), a fraction
+    of the standard surface gradient at fixed stations, and a stratified
+    TEMPERATURE field δn = N δT/T kicked by its transverse gradient at
+    fixed stations (Thickness × Aspect cells in the camera's up frame).
+    With the real volume, 2 K over 3 km moved the horizon 0.12′ sideways
+    and 0.01′ vertically; the arcminute boil is the near field's and the
+    stacked, rippled images are the layer waves' (§4.7.2). Two laws
+    survive: nothing inside the walk may change the step SCHEDULE per
+    ray, and no world field may be point-sampled per sub-step — fixed
+    stations only. The lanes `rf_shim2.x/y/w` are free.
 
 - **The near shimmer** (the small, fast part): N = 8 stations at fixed
     arc lengths (i + ½)·L/N along the first L = 1 km of the ray; every
@@ -1071,6 +3631,145 @@ pipeline, not an overlay post-fx glass filter over everything — like
     mapping folds — the sun tore into detached blobs. At 0.3 (20″) the
     edge is wavy and whole; the walk-integrated field at amount 1
     deforms the disc strongly but no longer tears it.
+
+##### 4.6.2 Heat blur (2026-09-06)
+
+User: "the heat shimmer in real world more like blurs the air, not
+displaced like a single glass sheet ... i want it to look more like the
+heat blur" (a telephoto video of a low sun: a fluffy, boiling disc, its
+edge smeared rather than bent). A single ray per pixel through a single
+field realisation IS a glass sheet. Two physical facts turn it into
+blur: (1) Kolmogorov's angle-of-arrival spectrum puts the larger share
+of the tilt variance below the field's finest cell — with l^(-1/3)
+weighting, the band from the inner scale l₀ ≈ 5 mm up to the finest
+cell l_c against the band the field resolves (l_c to its period, N
+cells): σ²_sub/σ²_res = [l₀^(-1/3) − ⟨l_c^(-1/3)⟩] / [⟨l_c^(-1/3)⟩ (1 −
+N^(-1/3))], with ⟨l_c^(-1/3)⟩ = 1.5 (θ_c L)^(-1/3) the path mean of an
+angular cell over the near field — 2.46 at 3′ over 1 km, N = 6; (2)
+those eddies are centimetres and cross the line of sight hundreds of
+times per exposure (and the aperture averages the rest), so the camera
+never sees one realisation: it sees their distribution. The first
+build drew that distribution by Monte Carlo — every film sample tilted
+its ray by an independent Gaussian angle (blue-noise Box-Muller,
+advanced per pass) before the trace, so the walk, its ground verdict
+and the celestial all took the tilted ray — exact, and rejected the
+same evening: "too noisy for use — add multiple heat haze layers on top
+of each other TAA style". The blur is a convolution of the final image
+I(r̂) in camera-direction space (I(r̂ + δ) averaged over δ), so it can
+be drawn as a fixed quadrature instead of a random one: the BG compose
+draws the discs N = 6..16 times (N ∝ σ/θ_pix), each through its own
+tilt of the EXIT direction on a Gaussian-quantile spiral — radius σ√(−2
+ln(1 − u_i)), u_i = (i + s)/N, golden-angle azimuths — equal weights,
+the spiral's rotation and the quantile shift s advanced per
+accumulation pass (golden-ratio sequences), so the film converges on
+the Gaussian with no per-pixel noise and a single frame at the default
+amount is already smooth (taps half a pixel apart). The starfield,
+whose gather is the expensive part, is drawn once with its Airy PSF
+widened to θ = √(θ_pix² + (2.3σ)²) (a Gaussian of σ, flux-conserving)
+and composited under the taps' mean transmittance (`g_pa2CelSkipStars`,
+`g_pa2CelBgT` in the celestial lib). Tilting the exit direction rather
+than re-walking is exact wherever the mirage mapping has unit
+magnification; a fold's compressed bands take the blur at their
+compressed magnification (less than the eddies' true one) and the
+horizon's cut of the disc stays sharp (the centre ray's verdict) —
+re-walking every tap would be exact at N times the walk. Achromatic to
+the 2 % dispersion of the tilt; the same sub-pixel gate and tan-law
+clamp as the near field (`pa2RfNearAmp`). Not in the air pass (the sky
+is smooth; the far ground's texture stays sharp — a known gap), not in
+the LUT producers. Knob Heat Blur (default 1), lane `rf_shim2.x` =
+Blur × ratio, CPU `shimmer_blur_ratio`. Per-λ shimmer, asked in the
+same breath: the near kick is a gradient of n − 1, so the dispersion
+re-walk now scales it by the wavelength's ratio — a 2 % effect; the
+coloured fringe of the reference is the dispersion split displaced by
+the ripple, which the walk already does.
+
+##### 4.6.3 The shimmer on turbulence physics (2026-09-06, late)
+
+User: "the heat haze shimmer is much better, but still needs some work.
+can you think of a more physically accurate way to do it?" — then
+"sounds good" to the plan below. The stand-ins of §4.6.1–4.6.2 (a
+two-octave value-noise volume at one angular scale, a tan-law
+amplitude, a frozen screen sliding at a fixed rate, and a Kolmogorov
+band ratio for the blur) are replaced by the model the imaging-through-
+turbulence literature reduces to (Fried 1966; Tatarskii 1971; Schmidt
+2010, *Numerical Simulation of Optical Wave Propagation* §9; Chimitt &
+Chan 2020, *Opt. Eng.* 59(8)): a tilt field with Kolmogorov statistics
+plus a blur from the unresolved band, both driven by C_n².
+
+- **The screen.** ψ = φ/k for a unit path integral I = ∫C_n² ds = 1
+    m^{1/3}, so ∇ψ is the angle of arrival in radians per √I: the von
+    Kármán PSD Φ_ψ(κ) = 0.207 (κ² + κ₀²)^{−11/6} e^{−κ²/κ_m²} (0.49·0.423:
+    Fried's r₀^{−5/3} = 0.423 k² I in the κ form, over k²), outer scale
+    L₀ = 2 m (κ₀ = 2π/L₀), inner scale l₀ = 5 mm (κ_m = 5.92/l₀),
+    FFT-synthesised on 1023² texels of 8 mm (an 8.18 m period, periodic
+    by construction), padded to 1024 with the wrap texel and written ×32
+    into `uBlueNoise.y` — the reserved channel, so no new sampler (the
+    fullest rect build sits at 30 of 32 slots). σ_ψ ≈ 0.34; the tilt is
+    achromatic (φ ∝ k cancels).
+
+- **The stations.** The same eight fixed stations over the first
+    kilometre (the schedule law of §4.6.1 stands). Station i reads the
+    screen on a cylinder of radius s about the camera, u = s·az, v =
+    s·el in metres (az from the rect camera's forward, `cam2`, so the
+    seam sits behind the camera), in its own turned (0.7 i rad) and
+    offset (golden fractions of the period) window, so no two stations
+    share a period; the kick = the central difference of ψ over the pixel
+    footprint D = max(θ_pix s, texel) — the footprint-averaged tilt —
+    × √(C_n²(h_i)·Δs) × the wavelength's refractivity ratio. Near
+    stations give broad coherent waves, far ones fine detail:
+    anisoplanatism for free.
+
+- **C_n²(h).** The knob is C_n² at 2 m in units of 1e‑14 (calm night
+    0.1, typical day 1, strong sun 10 = the default, hot road 100),
+    falling as (h/2)^{−4/3} above a 0.5 m floor — free-convection
+    similarity in the sunlit surface layer (Wyngaard, Izumi & Collins
+    1971). The elevation dependence follows: a 10° ray leaves the layer
+    in tens of metres and takes under a fifth of the horizon ray's I; a
+    −1° ray hugging the ground takes stronger air.
+
+- **Frozen flow.** Each station's window drifts with the wind at its
+    height, the neutral log profile U(h) = U₁₀ ln(h/z₀)/ln(10/z₀), z₀ =
+    3 cm: the component across the view streams the pattern sideways,
+    the component along it slides the window on a per-station diagonal
+    (new air replacing the slice — a 2-D screen cannot advect through
+    itself, this stands in for it), and the updraft lifts it (read at
+    p − v t, the sign law). The boil is the stations' differential
+    motion. Knobs Wind (m/s) and Wind From (°, a compass bearing under
+    the North Offset; the CPU folds it into an angle from the rect's
+    forward, `_wind_angle_from_view`).
+
+- **The blur.** Per axis, the eddies between wavenumbers κ₁ and κ₂
+    leave the tilt variance π∫κ³Φ_φ/k² dκ = 1.95·I·(κ₂^{1/3} − κ₁^{1/3}).
+    The band below the footprint, from 2π/D to κ_m, is the heat blur's
+    variance, gathered at every station and — because a grazing ray
+    stays in the surface layer for kilometres — along the far path below
+    300 m at every walk step (its resolved remainder, arcseconds of slow
+    wander from metre-scale eddies, is dropped). The trace hands the sum
+    to the compose (`g_pa2RfBlurVar`), Heat Blur multiplies it, the taps
+    of §4.6.2 draw it. Numbers: a grazing kilometre at C_n² 1e‑13 (I =
+    1e‑10) has r₀ = 5.7 mm and λ/r₀ = 20″ FWHM; the band formula gives
+    8.4″ σ below a 0.7 m footprint, the same figure; the horizon ray's
+    full low path (the near field plus ~15 km of grazing air before the
+    curvature lifts it) gives ~18″ σ; a hot road (1e‑12) five times that,
+    the arcminutes of the reference video.
+
+- **Stars.** The scintillation σ at the zenith is 0.8·√(C_n²/1e‑13)
+    capped at 1.2, boiling at the wind's rate; the free-atmosphere
+    profile (Hufnagel–Valley) for zenith twinkling is the open item.
+
+- **Retired:** Amount, Scale, Boil; the tan law; the volume's
+    difference RMS; `shimmer_blur_ratio`; `pa2RfNearAmp`, `pa2RfTurb`.
+    Twin: `cn2_profile`, `tilt_variance_band`, `residual_tilt_variance`,
+    `fried_r0`, `wind_log_profile`, `trace_ray_table(near=dict(cn2, …))`
+    → `blur_var`; the screen's tilt RMS is checked against the band
+    formula (`test_turbulence_screen`); `probe_refraction.py` section 5
+    reads the GPU blur variance per ray.
+
+- **Open:** deriving C_n² from the Ground ΔT knob through Monin–Obukhov
+    similarity (a hot ground would then give the inferior mirage and the
+    strong shimmer together); the aperture (a real lens averages the
+    tilt below its diameter into the same blur); the along-view
+    advection.
 
 #### 4.7 Green flash: per-channel bending (stage 3)
 
@@ -1122,6 +3821,173 @@ pipeline, not an overlay post-fx glass filter over everything — like
 
 - Cost: 3 walks on ≤ 5 % of the BG pixels at telephoto only, ~2–5 ms
     at 4K.
+
+##### 4.7.1 Revision 2026-09-06: the spectral dither
+
+Three fixed wavelengths are gone from the celestial arm. Where the
+split shows (the same 0.1 px gate), each film sample draws λ ∈ [400,
+700] nm from blue noise (`uBlueNoise.w`, the pass-advanced R1 shift the
+caster jitter uses — bound at BOTH background-compose dispatch sites;
+the first build bound it only in the ground draw, so every pixel of a
+pass shared one wavelength and the sun swept through the spectrum),
+walks it once with Ciddor's ratio N(λ)/N(535) (dry-air dispersion
+shape; T, P, humidity cancel in the ratio, verified against the R/B
+lanes to 5e−6) — the re-walk in the 3° band, the first-order rotation
+elsewhere — and composites the celestial's RGB along that direction.
+Two normalisations keep it honest: the colour-matching weight w(λ) =
+S₅₇₇₈(λ)·max(sRGB(CMF(λ)), 0) over its per-channel mean on [400, 700]
+(E[w] = 1: the disc's average colour is the three-band one), and the
+transmittance T_sample = T(λ)·T_c / E_c[w_c T] with E_c the pixel's own
+16-point mean — the film's mean image equals the band result exactly,
+only the rims carry the spectrum. T(λ) from the three band values is a
+piecewise POWER LAW (log T linear in log λ between the band points,
+the end segments' exponents carried outward): a free quadratic in λ⁻⁴
+bent back UP at the blue end whenever the bands were aerosol-laden
+(log T is concave in λ⁻⁴ there), T(400) above T(535), and the sun
+banded. The raw weights alone brightened a low sun 25 % and yellowed
+it: the red lobe reaches 700 nm where the fitted T is far above the
+615 nm band's. Cost: one walk per sample where three ran, plus ~40 exp
+for the weights. Star scintillation (§4.6.1) and the sky in-scatter
+stay three-band. Not done, on purpose: dithering the walk's step phase
+(the per-ray error is 1″ after §4.2.1, the TAA jitter dithers the fold
+edges, and a compose-only dither breaks the air-pass/compose walk
+agreement).
+
+##### 4.7.2 Mirage layer waves (2026-09-06)
+
+User: "are the air masses added to the mirage layers? ... build the
+layer undulation on the Mirage Layers block, the physical way". The
+air masses add a temperature deviation on top of the profile but never
+move the layers; the stacked, rippled images of real sub-duct sunsets
+come from the inversion itself undulating under internal gravity
+waves. Model: a wave train η(x, t) = A·[cos(k(x·d̂ − ct)) + 0.5·cos(1.7k
+(x·d̂₊₂₅° − ct) + 1.9) + 0.3·cos(2.9k(x·d̂₋₃₅° − ct) + 4.1)] with k =
+2π/Length, d̂ the Dir knob's horizontal direction (the camera's up and
+a fixed horizontal pair seeded by world X, as the masses), and the
+phase speed c = √(g'·z_base), g' = g·ΔT/T, from the inversion's own
+strength and base height (a shallow warm layer over the ground: the
+interfacial wave is non-dispersive, one c for the train; floors keep a
+wave moving with no elevated layer). The profile above the ground layer
+rides η: every table read of the walk takes h − η·smoothstep(5, 20, h)
+below 2 km — the trace and the providers alike, so the air march and
+the verdict agree; the LUT producers (PA2_RF_NO_TURB) keep the smooth
+profile, as with the masses. One η per sub-step for its three reads.
+Lanes: `rf_cfg2.w` = A (0 = off; the path cap became a constant),
+`rf_shim2.z` = 1/Length (the masses' scale height became a constant),
+`rf_wind.w` = c·t (the near field's length became a constant),
+`rf_shim.y` = the direction (the horizon-normalised shimmer amplitude
+is derived in-shader from `rf_cfg3.x`). Rect-only, in the shimmer key
+(no table bake); scene time flows while A > 0. Twin: `undulation=
+dict(field(s, h) -> η)`; `layer_wave_speed(ΔT, z_base, T)`.
+
+**Revision 2 (the same evening): internal gravity waves.** User, in
+three steps: "the wave undulations are more than just 3 waves, there
+are the large masses and really small ones too", "since these are
+gravity waves, lets implement gerstner wave summing with frequency and
+amplitude like we do for water", then a derivation — internal gravity
+waves as a vertical displacement ξ_z(x, z, t) = Σ Aᵢ cos(k_h,i·x + mᵢ z
+− ωᵢ t + φᵢ) with ω = N k_h / √(k_h² + m²), the atmosphere evaluated at
+z − ξ — "double check the math, references and lets implement".
+
+*The math, checked.* (a) The dispersion relation is the Boussinesq,
+non-rotating, no-mean-flow internal-wave relation: Gill, *Atmosphere–
+Ocean Dynamics* (1982) §6.4–6.5; Nappo, *An Introduction to Atmospheric
+Gravity Waves* (2002) §2.2; Sutherland, *Internal Gravity Waves* (2010)
+§3.3. ω ≤ N, so periods are ≥ 2π/N (9 min at N = 0.012 s⁻¹); the
+hydrostatic limit k_h ≪ m gives ω = N k_h/m, periods of tens of minutes
+for the 20–200 km / 5–30 km waves seen from orbit. The non-Boussinesq
+term adds 1/(4H_ρ²) under the root — 1 % for λ_z = 10 km, ignored. (b)
+N ≈ 0.01 s⁻¹ in the troposphere, 0.02 in the stratosphere (Holton &
+Hakim 2013 §2.7.3): N² = (g/T)(dT/dz + Γ_d), Γ_d = g/c_p = 9.8 K/km,
+−6.5 K/km gives 0.0106. (c) T′ = −ξ (dT/dz + Γ_d) is the adiabatic
+parcel displacement, right (Nappo §2.2, the polarization relations of
+Fritts & Alexander 2003, *Rev. Geophys.* 41, eqs. 20–23). (d) "Evaluate
+ρ_base(z − ξ)" is NOT: it is the passive-tracer form, right for
+potential temperature, humidity and aerosol mixing ratio, but density
+and temperature adjust adiabatically as the parcel moves through the
+pressure field, so ρ′/ρ = ξ N²/g = −T′/T — the derivation's own T′
+formula — which is g/(H N²) ≈ 10 times smaller than the ξ/H the warp
+gives (100 m: 0.12 % of density, not 1.25 %). The snippet's `hWave =
+height − displacement` for the Rayleigh density therefore overstates
+the molecular effect tenfold; for aerosol, haze and humidity layers it
+is right, and those are where the bands show. (e) For refraction, n − 1
+∝ ρ, so free-air internal waves perturb the bending gradient by
+(N²/g) m A ≈ 0.6 % of the standard gradient for A = 100 m, λ_z = 10 km,
+alternating in sign along the ray — an arcsecond at the horizon,
+invisible. Inside a sharp inversion the environmental gradient
+dominates the adiabatic one (Γ_d against 40 K/km), so the profile warp
+h − η the mirage layers use is within ~20 % of the exact adiabatic
+displacement there, and is what moves the mirage. The tracer warp is
+therefore kept for the layers (the pressure part of n̄(z − ξ) is the
+remaining approximation) and documented; a Rayleigh/aerosol density
+warp of the sky itself would be a separate feature (the LUT sky is
+horizontally homogeneous by construction).
+
+*Implemented.* `pa2RfWaveEta(pRel, e1, e2, h)` = six waves, horizontal
+wavelength Length / 1.887ⁱ, amplitude A Gainⁱ, directions fanned ±0.45
+i rad about Dir, phases 1.9 i, ONE vertical wavenumber m = 2π/Vertical
+(the phase tilts with the read height h), ωᵢ = N kᵢ / √(kᵢ² + m²) with N
+= `layer_brunt_vaisala(ΔT, thickness)` from the inversion's own lapse
+(the ISA value with no layer). The user's Gerstner request survives as
+the Steepness knob: Q > 0 adds the trochoid's horizontal orbit as a
+stand-in for finite-amplitude steepening (Dᵢ = Q Aᵢ / Σ Aⱼ kⱼ, no loops
+for Q ≤ 1, the lost Eulerian mean Σ Aᵢ Dᵢ kᵢ / 2 put back so Q never
+moves the layer, two fixed-point inversions x₀ = x + D(x₀)); Q = 0 is
+the linear sum exactly as proposed. Speeds: with Vertical 10 km the
+3 km wave runs at 0.96 N — c = 19 m/s for the 0.8 K / 20 m layer, a
+160 s period, ripples that visibly travel; Vertical 40 m gives the
+trapped wave at N/m ≈ 0.3 m/s. Lanes: N on `rf_shim2.y`, m on
+`rf_shim2.w`, gain + steepness packed on `rf_wind.w` (floor/1000,
+fract), time from `rf_shim.w`; the c·t lane and the two-layer speed are
+gone. Twin `gravity_wave_eta`; the GPU sum matches it to 2 cm on 5 m
+waves (`probe_refraction.py` section 6).
+
+**Revision 3 (the same night): 1-D along the up axis.** User: "the
+gravity waves i think should be 1D - mapped to the planet's up axis"
+(asked which reading: altitude only). The horizontal structure is no
+longer drawn: ξ(h, t) = Σ Aᵢ cos(m h − ωᵢ t + φᵢ), evaluated for every
+point along the ray at the camera's horizontal phase — the crest taken
+as long across the line of sight — so the whole low profile rises and
+falls with the wave and the stacked images of a sub-duct sun move
+vertically rather than breaking up along the horizon. Each wave keeps
+its own frequency from its horizontal wavelength through the dispersion
+relation (with Vertical 10 km ≫ Length all six run near N and the sum
+is one oscillation at ~N with slow beats; a short Vertical spreads the
+periods and corrugates the profile vertically). Gerstner's steepening
+reduces to the phase: one inversion step θ₀ = θ + Qᵢ sin θ with Qᵢ =
+Q Aᵢ kᵢ / Σ Aⱼ kⱼ, ξᵢ = Aᵢ (cos θ₀ + J₁(Qᵢ)) — the one-step trochoid's
+Eulerian mean is exactly −Aᵢ J₁(Qᵢ) (Jacobi–Anger), put back exactly at
+every steepness, where the converged fixed point's −Aᵢ Qᵢ/2 had left
+0.6 m on 5 m waves at Q = 1 (the cusp does not converge in two steps).
+The Dir knob and its lane (`rf_shim.y`, free again) retired
+with the horizontal coordinate; `pa2RfWaveEta(h)` and
+`gravity_wave_eta(h, t, …)`.
+
+**Revision 4: along the line of sight.** User: "the large gravity waves
+undulations now dont seem to do much." They could not: a lift uniform
+along the ray moves the whole low profile by one η(t), and a uniformly
+lifted profile is optically the eye lowered by η — five metres out of
+sixty changes a sub-duct sun very little. What restacks a mirage is the
+layer height varying ALONG the path: a grazing ray crosses crests and
+troughs over tens of kilometres and each part of the path bends
+differently (the stacked, rippled bands of rev. 1 came from that). So
+the wave travels along the line of sight, ξ(s, h, t) = Σ Aᵢ cos(kᵢ s +
+m h − ωᵢ t + φᵢ) with s the distance from the camera: the displacement
+stays vertical and one-dimensional in the sense the user asked for,
+the crests run across the view — circles about the camera, which are
+planes to any field narrower than a degree — and no direction knob
+returns. Gerstner's steepening is then the trochoid along s. The
+pattern moves with the camera (its origin is the camera), as the first
+build's did; a world-fixed origin would need one more lane.
+`pa2RfWaveEta(s, h)`, `gravity_wave_eta(s, h, t, …)`; the probe's
+section 6 reads the GPU sum over 30 km of s. Two more things from the
+same exchange: Vertical's default drops from 10 km to 200 m (at 10 km
+the phase changed 0.03 rad across the layer, one more reason nothing
+showed; at 200 m the layers compress and stretch by ±15 % for 5 m
+waves, the direct lever on a mirage's gradients), and the amplitude
+lane is held back so the sum's vertical strain Σ Aᵢ m (1 + Q) stays
+below 0.8 — past 1 the warped profile h − η(h) folds on itself, an
+overturning wave the table cannot represent (`wave_amplitude_guard`).
 
 #### 4.8 Space views
 
@@ -1521,6 +4387,22 @@ sunset.
 - **Reflections in materials** (equirect) show an unrefracted horizon:
     ≤ 34′ mismatch in a reflection — accepted under the role law.
 
+- **Teeth at a duct fold's neck** (2026-09-06, user render): the step
+    schedule's phase-dependent residual, magnified by the fold. Twin vs a
+    fine-step reference, Duct preset from 70 m: Medium (4 cells/step,
+    ~1.2 km steps, ~3 across the 10 m inversion) 1–4″ row to row → 1–6 px
+    teeth at the neck; High 2 cells halves it; 1 cell (4× the steps)
+    leaves 0.5″ / 1 px; a 300 m cap everywhere would need 2500 steps.
+    Shipped: the sub-frame phase dither (the first sub-step's fraction per
+    accumulation frame, `PA2_RF_PHASE` = rf_shim.y, toggle Sub-frame
+    Dither) — a 16-frame film cuts the teeth 3–4×; the mean bias (~10″ at
+    Medium) stays. Open: a layer-aware refinement — 1 cell or
+    ds ≤ thickness/8/|cz| only while |ΔG| across the cell is large (the
+    `table_g_var` input) — costs tens of steps per crossing and removes the
+    residual and the bias; with the layer waves on, ds ≤ L/10 inside the
+    inversion band (the 1.2 km steps alias a 3 km wave: 66″ row to row in
+    the twin, 10″ with the cap).
+
 - **Mock-mirage dark bands in the LUT sky** (2026-09-06): the extinction
     half of a band (the strip's grazing rays run tens of km farther in the
     low haze) needs T along the pixel's own walked path; the atlas rows
@@ -1585,9 +4467,19 @@ for ground, clouds and sky alike).
 
 ## 1:1 Window-mapped sky — design & stage plan {#window-sky}
 
-`shipped:`{: .label-fixed } Shipped · amended 03.09.2026 · 04.08.2026 · `docs/design-1to1-window-sky.md`
+`shipped:`{: .label-fixed } Shipped · amended 10.09.2026 · 04.08.2026 · `docs/design-1to1-window-sky.md`
 
 **In this document:** [Target architecture](#window-sky-target-architecture) · [Amended 2026-09-03 — sizing law, hybrid cut](#window-sky-amended-2026-09-03-sizing-law-hybrid-cut) · [What this retires](#window-sky-what-this-retires) · [Stages](#window-sky-stages) · [Traps carried from the prototype](#window-sky-traps-carried-from-the-prototype)
+
+Status: SHIPPED (2026-08-04 → 09-03) and current in 3.0.7-beta. Since the
+2026-09-03 amendment below: the world fovea group is ONE variant for
+both engines again (Window 1:1 for Cycles too, laid out left to right,
+with the direction arm and a Closest draft per tier, 2026-09-10), the
+Cycles rect is tier-sized (tiny preview, 1:1 settled image), and the
+"clouds keep the equirect/low-res path" line of the opening paragraph
+is superseded — clouds composite at 1:1 in the background compose
+whatever the Atmosphere Resolution (2026-09-05; see the LUT atmosphere
+design §21.9 and the cloud design's stage 2b-vii).
 
 User direction (2026-08-04): atmosphere + composed ground render 1:1
 pixel-perfect like the prototype — Window-coordinate mapping ("much more
@@ -1891,11 +4783,22 @@ details.
 
 ## Optimized cloud rendering: interleaved low-res march + temporal upscale {#cloud-upscale}
 
-`shipped:`{: .label-fixed } Shipped · stages 1–4 and 2b · 05.08.2026 · `docs/design-cloud-temporal-upscale.md`
+`shipped:`{: .label-fixed } Shipped · superseded in part · interim system · 05.08.2026 · `docs/design-cloud-temporal-upscale.md`
 
 **In this document:** [Why this is possible cheaply here](#cloud-upscale-why-this-is-possible-cheaply-here) · [Architecture](#cloud-upscale-architecture) · [Non-goals](#cloud-upscale-non-goals) · [Risks](#cloud-upscale-risks) · [Companion feature: separate preview vs render graphics settings](#cloud-upscale-companion-feature-separate-preview-vs-render-gra) · [Stage 1 / C2 wiring map](#cloud-upscale-stage-1-c2-wiring-map) · [Stage 2a decision](#cloud-upscale-stage-2a-decision) · [Stage 3: KSA 1:1 march port](#cloud-upscale-stage-3-ksa-1-1-march-port) · [Stage 4: KSA shadow volume + sharp godrays](#cloud-upscale-stage-4-ksa-shadow-volume-sharp-godrays) · [Shadow-volume FIDELITY AUDIT vs the real sources](#cloud-upscale-shadow-volume-fidelity-audit-vs-the-real-sources) · [What actually blocks retiring the LIGHT GRID](#cloud-upscale-what-actually-blocks-retiring-the-light-grid) · [DIRECTION SET 2026-08-07: the KSA march is the one that ships](#cloud-upscale-direction-set-2026-08-07-the-ksa-march-is-the-on) · [Stage 2b: the KSA MV-reproject resolve](#cloud-upscale-stage-2b-the-ksa-mv-reproject-resolve)
 
-Status: DESIGN (2026-08-05). Research base: research-ksa-cloud-teardown-2026-08.md
+Status: SHIPPED, then SUPERSEDED IN PART (as of 2026-09-10). Stages 1–4
+and 2b landed in 2.8.x; 2b-vii made the primary march 1:1 always. Since
+then: the house march and the LIGHT GRID are deleted outright
+(2026-08-10 — the KSA march is the only transport), the cloud density
+model is the ported one with a baked per-layer weather chart and a
+Worley mip atlas (2026-09-05, ~5x faster passes), the composite/godray/
+interleave/shell pieces are K1–K4 of the LUT atmosphere design (§21.9),
+scene objects shadow the clouds and scene lamps light them. The
+"companion feature" below shipped as Viewport TAA Samples / Render
+Samples. THE CLOUDS ARE AN INTERIM SYSTEM: the real cloud renderer is
+in development and will replace this pipeline; this document is the
+record of what runs today. Original header: DESIGN (2026-08-05). Research base: research-ksa-cloud-teardown-2026-08.md
 (ACTUAL KSA sources — primary reference now) + research-temporal-upscaling-2026-07.md
 (Three Geospatial, corroborating). User: "next big thing is get the optimised
 cloud rendering in".
@@ -2454,7 +5357,7 @@ warp-bridge frames, the KSA-shaped levers are cheaper rays (#11) and
 
 ## North Offset — Design (2026-07-31) {#north-offset}
 
-`deferred:`{: .label-deferred } Deferred · 31.07.2026 · `docs/design-north-offset.md`
+`shipped:`{: .label-fixed } Implemented 04.09.2026 · 31.07.2026 · `docs/design-north-offset.md`
 
 **In this document:** [The shape of the problem](#north-offset-the-shape-of-the-problem) · [Touch points](#north-offset-touch-points) · [Decisions needed before implementation](#north-offset-decisions-needed-before-implementation) · [Exit gate](#north-offset-exit-gate) · [Cost](#north-offset-cost)
 
@@ -2607,9 +5510,21 @@ the systems that do not go through `get_sun_vector`.
 
 ## Ground Shader — Design (2026-07) {#ground-shader}
 
-`shipped:`{: .label-fixed } Shipped · 2.7 · 07.2026 · `docs/design-ground-shader-2026-07.md`
+`shipped:`{: .label-fixed } Shipped · 2.7 · BRDF superseded 08.2026 · 07.2026 · `docs/design-ground-shader-2026-07.md`
 
 **In this document:** [Why a separate shader](#ground-shader-why-a-separate-shader) · [Data flow](#ground-shader-data-flow) · [Ground-shader samplers](#ground-shader-ground-shader-samplers) · [Requirements → design](#ground-shader-requirements-design) · [8a — the new grid-column arm](#ground-shader-8a-the-new-grid-column-arm) · [8b — the older slab arm was lit by the wrong sun](#ground-shader-8b-the-older-slab-arm-was-lit-by-the-wrong-sun) · [UI](#ground-shader-ui) · [Rebake & cadence](#ground-shader-rebake-cadence) · [Validation](#ground-shader-validation) · [Phases](#ground-shader-phases)
+
+Status: SHIPPED in 2.7, BRDF SUPERSEDED (as of 2026-09-10). The compose
+pass, the T→0 fold, water reflections, cloud bounce, night lights,
+object shadows, moonlight and the heightmap (`earth_height_image`,
+bicubic, normals, Terrain Height) are all live. What §3 recommends is
+NOT what runs: the Hapke-lite land BRDF, the Chandra-Hapke branch, the
+separate kSpec specular and the Surge knob were retired on 2026-08-26 —
+the PRINCIPLED land model is the only one (one GGX lobe for specular,
+sky reflection and roughness; water joins the same lobe; LTC disc
+specular for sun and moon; real split-sum; MS and ozone in the sky
+reflection). Phase 3 (refraction) is owned by the refraction design;
+the ground rises with the walked rays there.
 
 A dedicated GPU compose pass that shades the planet surface offscreen
 and folds it into the S/T pair, retiring the node-tree `PhysicalPlanet`
@@ -3171,12 +6086,10 @@ here. Thank you all.
     tricubic light-cache filtering, analytic weather-map cloud shadows, and
     the raymarched-to-2D orbit fade (fade windows after
     `RaymarchedTo2DFade.glsl`).
-    The procedural Milky Way ("KSA" variant in `rect_celestials_lib.glsl`,
-    `pa2MwCloud`/`pa2CelMilkyWay`) ports the cloud-noise enhancement stack
-    of their `Core/Shaders/MilkyWay.frag` — simplex fbm domain warp, the
-    ridge/soft/colour octave loops, seam patch and composite constants
-    (including their own alternative hash) — with a procedural band
-    standing in for their 320^2 cubemap base, which is not shipped.
+    A Milky Way variant ported from their `Core/Shaders/MilkyWay.frag`
+    (simplex fbm domain warp, ridge/soft/colour octave loops, seam patch)
+    shipped from 2026-08-21 and was REMOVED on 2026-09-07, when the
+    analytic-blob galaxy replaced it; no code from that file remains.
 
 - **Nubis (Andrew Schneider, Guerrilla Games)** — SIGGRAPH "Advances in
     Real-Time Rendering" series, esp. *Nubis³: Methods for Real-Time
@@ -3217,6 +6130,24 @@ here. Thank you all.
     and its modern implementations: the multiple-scattering model that the
     analytic MS approximation (`ms_precompute` / `ms_eval`) is calibrated
     against, and the sky-irradiance conventions used by the cloud ambient.
+
+- **Unreal Engine auto exposure — Epic Games**
+    (<https://www.unrealengine.com/en-US/tech-blog/how-epic-games-is-handling-auto-exposure-in-4-25>,
+    <https://dev.epicgames.com/documentation/en-us/unreal-engine/auto-exposure-in-unreal-engine>)
+    and **Unity HDRP's Exposure override**
+    (<https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@14.0/manual/Override-Exposure.html>):
+    the three conventions PA2's Auto exposure follows (`core/exposure_auto.py`)
+    — metering a PERCENTILE BAND of the log-luminance histogram rather than
+    its mean (Unreal's Low/High Percent, 10/90 today and 80/98.3 in the UE4
+    default it replaced; PA2 uses 50–98, bright-biased because the sky is
+    the subject), an EXPOSURE COMPENSATION CURVE against the measured scene
+    EV so dark scenes are allowed to stay dark (Unreal's curve asset,
+    Unity's Curve Mapping mode; PA2 parameterizes it as a soft knee with an
+    Adaptation strength), and ASYMMETRIC adaptation speeds, faster toward
+    light than toward dark, as the eye behaves (Unreal's SpeedUp 3 /
+    SpeedDown 1, Unity's Speed Dark-to-Light / Light-to-Dark; PA2 puts the
+    asymmetry on a rate cap in EV/s). The implementation, its units and its
+    physical metering fallback are PA2's own.
 
 ### Papers & data {#credits-papers-data}
 
