@@ -1,3 +1,66 @@
+### 3.0.7-beta <small>- released 10.09.2026</small>
+
+A beta of the 3.0 series, and everything since 2.8.1: a new sky engine, a real night, auto exposure, atmospheric refraction, ringed planets, and objects and lamps that take part in the atmosphere. Requires **Blender 5.2 or newer**, installed as an extension (drag the ZIP into Blender, or *Preferences → Get Extensions → ⌄ → Install from Disk…*); it updates 2.8.1 in place. Validated on Windows (Vulkan) and macOS (Metal); Linux/OpenGL has not had a full pass yet.
+
+!!! note "The clouds are an interim system"
+    The clouds in this release are temporary. Development of the real cloud system is ongoing and they will be replaced in a later release — treat the cloud controls as provisional.
+
+`new:`{: .label-new }
+
+- **A new sky engine by default — LUT Atmosphere.** The visible sky now resolves from a lookup-table chain based on Hillaire's atmosphere model, at about half the cost of the old march and verified against a converged reference (clear sky 0.5 %, civil twilight 4.5 % P95). It runs in renders and at night, follows the refracted path, and lights the reflection probe. The analytic march stays available as the reference option.
+- **A real night.** Physical night calibration; the moon lights the atmosphere with the measured lunar phase curve; starlight and airglow join the multiple scattering with a **Starlight MS** slider; **light pollution** from real night-lights data (city map or hemisphere modes, single-city blobs, a Night Lights colour) that reaches the cloud undersides; a **Milky Way** (off by default, follows the Stars toggle); bright stars with proper halos; and an exposure range that reaches deep night (EV cap 32, EV minimum −21).
+- **Auto exposure, auto white balance, auto range placement.** A percentile-band meter with an adaptation curve (eased like an eye in the viewport, settled in renders), white balance from the physical illuminant, and the fp16 storage window placed automatically from the brightest source in the shot. Auto is the shipped exposure mode.
+- **Meter choice for Auto exposure — Sky / Viewport / Incident.** Meter the atmosphere alone, the whole Rendered viewport (objects, lamps and emission included), or the incident light like a handheld meter. The info box names the meter that delivered the reading.
+- **Atmospheric refraction, stage 1.** Bent view rays, mirages with an elevated inversion and internal gravity waves on the layers, near-field heat shimmer on turbulence physics, heat blur, spectral dispersion and a North Offset — every feature its own switch, shipping with a tuned mirage layer.
+- **Saturn, Uranus and Neptune with rings.** Accurate Saturn ephemeris from a bundled Horizons table, physical ring light transport with an exact annulus integral, gas-giant haze with a blue limb rim and seasonal blue pole, oblate planet discs on the true poles, and the full Cassini mission trajectory bundled as a path preset.
+- **Scene Lights.** Blender Point and Spot lamps light the addon ground, the air and the clouds, using EEVEE's own light law.
+- **Objects and clouds.** Your objects shadow the clouds, and scene lamps light them.
+- **Cycles Reference Atmosphere** (Scientific): one button builds an Earth-sized path-traced twin of the pure atmosphere, with a Reference Mode switch to A/B it against the real-time sky.
+- **Artistic Sky Color**: a normalised scattering-colour picker with a Strength multiplier in the Simple layout.
+- **Altitude in km and m**, a **two-way sun lamp** in Artistic mode (rotate the lamp, the sun follows), and celestial gizmos.
+
+`improvements:`{: .label-improvements }
+
+- **Clouds rebuilt** on a pipeline ported from KSA: a baked density model with a per-layer weather chart and a Worley mip atlas (about 5× faster cloud passes), 3×3 interleaved sampling with motion vectors, a quality ladder that drives the march, clouds composited at full resolution whatever the Atmosphere Resolution, and a shadow volume anchored to a fixed 1 km cell that no longer flickers under camera motion.
+- **1:1 window sky.** The sky rectangle is sized to the exact on-screen pixels (the camera frame in camera view) and renders serve full-frame pixels; **Atmosphere Resolution** now only scales the air texture.
+- **Principled ground.** One GGX lobe unifies specular, sky reflection and roughness on land and water; exact sun and moon disc speculars; reflections carry multiple scattering and ozone. Ground off is bottomless by default.
+- **Range Placement is brightness-neutral** — the slider only places the fp16 storage window, the display exposure compensates — and the scene's own lamps now follow it through their Exposure field, so they no longer drift when it moves.
+- **Objects cut into the sky** with a hybrid silhouette + haze composite that puts depth-correct aerial perspective on geometry; the compositor is AOV-only and lighter.
+- **Cycles** gets a two-tier sky publish (a tiny draft, then a 1:1 settled image), follows dragging promptly and no longer waits half a minute for the sky.
+- **Interface: Simple and Scientific.** The Advanced tier is gone — Simple carries the everyday controls, Scientific everything (a saved Advanced preference falls back to Simple; pick Scientific once). Moon and Ground sections and the refraction toggle join the Simple layout; the three cloud decks get their own groups; the EV100 readout speaks photography; Post Processing carries its mode in the header.
+- **Removing PA2 restores everything it changed** — the previous world, exposure, white balance, view transform and render lock — and resources are shared correctly across several enabled scenes.
+
+`fixed:`{: .label-fixed }
+
+- **Remove Atmosphere no longer crashes Blender**, and the enable-path crash family (draw-callback writes racing the world sync) is root-caused and closed.
+- **macOS:** the cloud noise and the galaxy compile again on Metal, and animation renders no longer leak a GPU stack slot per frame.
+- **The sun gizmo moves the sun again** in Artistic mode, and Add → Remove → Add leaves the sun where it was.
+- A rendered sky scrambled on 5.2.0-alpha builds (reversed readback strides); a bright seam on the planet horizon; the white horizon line under a setting sun; a dark line under the horizon at reduced Atmosphere Resolution; the far cloud deck ending in a rectangle from high orbit; twilight decks with stripy gradients; the mirage sun sliced into bands; holes in the ground along a shimmering horizon in renders.
+- No more "Save N modified images" prompt for PA2's datablocks; a docked File or Asset Browser no longer pauses the sky; a quarter moon no longer runs 4× hot; the sun disc's limb darkening and brightness are the measured ones.
+
+`research:`{: .label-research }
+
+- Lock Interface is required while PA2 is enabled (Blender needs it to render safely); removal restores your setting.
+- Background and animation renders: Blender provides no GPU context to add-ons after the first frame, so the baked sky cannot update per frame in that job. Sun, moon and planet motion still renders.
+- The Viewport meter needs a Rendered-shading 3D view; renders reuse its last reading, and the Sky meter stands in when there is none.
+
+
+### 2.8.1 <small>- released 12.08.2026</small>
+
+The last release before the 3.0 series (2.8.0 on 07.08.2026 was a defaults test build). Most of this work was reworked again in 3.0; it is listed here for completeness.
+
+`new:`{: .label-new }
+
+- **The KSA cloud march ships as the cloud renderer**, with a shadow volume for cloud shadows and godrays, interleaved rendering with motion-vector reprojection, and cloud shadows on 3D objects.
+- **Ground shadow modes** and an exact far-object depth in the composite.
+- **Two-way exposure**: the Color Management slider and the camera EV mirror each other, and the EV100 readout is scene-referred.
+- A tonemapper family for the compositor (with the AgX pink fix), sphere-light sun and moon speculars on the ground, and the compute sky path enabled on Vulkan.
+
+`fixed:`{: .label-fixed }
+
+- The envmap and reflections could freeze under Cycles; the ground shifted while the sky accumulated; a long-session freeze from the jitter sequence; several Metal hardening fixes in the draw callbacks.
+
+
 ### 2.7.4 <small>- released 31.07.2026</small>
 
 A hotfix continuing the macOS work from 2.7.3, plus two important time-zone corrections.
