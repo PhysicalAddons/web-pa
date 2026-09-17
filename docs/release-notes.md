@@ -1,3 +1,50 @@
+### 3.0.8-beta <small>- released 17.09.2026</small>
+
+The addon now leaves your scene alone when you add it, Earth comes in the box (a colour map, city lights, real terrain and a Milky Way ship with the addon), and the Ground section is rebuilt around two materials: Ground and Water. Scenes made with 3.0.7-beta open and look the same. Requires **Blender 5.2 or newer**. The download is larger, about 90 MB, because the maps now come with it.
+
+!!! note "Older scenes that used a water mask"
+    The Water Mask slot is gone: water is now worked out from the terrain. If an older scene used a water mask *without* a height map, its seas will be missing. Switch Height to *Image* and the included terrain brings them back.
+
+`new:`{: .label-new }
+
+- **Earth comes in the box.** Switch the ground's Base Color or Height to *Image*, or tick Emission, and the slot fills itself: NASA's Blue Marble (April), NASA's city lights, and real terrain. No download, no setup.
+- **A download button on every image slot**, next to Blender's usual picker and *Open* button. Choose the month (the snow and the greenery follow the seasons) and the resolution, up to 2 km per pixel. Nothing downloads twice: if the map is already on your disk the button says **Apply** and works offline, and downloaded maps are shared by all your projects.
+- **Real terrain heights.** The height map is now high-precision data from NOAA. Mountains shade smoothly instead of in steps, and coastlines are right: with the old data, low-lying land such as Florida, the Netherlands and the Ganges delta was drawn as sea. NASA's older 8-bit terrain is still behind the download button, now up to 2 km. Finer versions of the new terrain (4 km and 2 km) will appear there when they are online.
+- **The Milky Way is included.** Tick *Milky Way* and NASA's galaxy map (without stars — the addon draws its own) appears. Sharper 4k and 8k versions are behind the download button.
+- **Stars Type.** *Points* (the default) draws every star as one clean pixel at any zoom. *PSF* keeps the soft star image, with Quality and Star Image size controls. Planets too small to show a disc follow the same choice.
+- **Water finds its own place.** With a height map, the sea appears wherever the land is below the water **Level** — no mask to paint. Raise the Level to flood the coasts, lower it to drain the seas. Without a height map, any Level above zero covers the whole planet in water.
+- **Surface Grid has a Draw choice:** *On Ground* (the lines dive under the water and fade with depth), *Over Everything* (the lines stay on top of land and sea alike), or *Chart Only* (a clean map with no shading).
+
+`improvements:`{: .label-improvements }
+
+- **The addon no longer touches your scene when you add it.** Blender's *Color Management → Exposure* stays exactly where you left it, and the addon's own Exposure slider picks up the same number: the two now show the same value in daylight and move together. The viewport keeps its focal length (no more switch to 35 mm), and white balance starts neutral.
+- **Exposure Mode starts on *Exposure***, a plain manual slider. *Auto* is still there when you want the camera to meter the scene for you. The Simple layout offers *Exposure* and *Auto*; *Physical Camera* (aperture, shutter, ISO) lives in the Scientific layout.
+- **A simpler Ground section**, built around what you are actually making. **Ground**: Base Color as a colour or an image, Emission for city lights, Height flat or from an image, and Roughness. In the Simple layout that is the whole section — everything else just works. The Scientific layout adds Height Mapping, **Water** (Level, Base Color, Roughness, Extinction, Shore Softness), Reflections and the Surface Grid.
+- **City glow reacts instantly.** Changing Light Pollution, its gain or its colour used to do nothing until the sun moved. It now updates at once, switches off together with the ground's Emission, and large city-light maps no longer freeze Blender while they load.
+- **Switching the Atmosphere off is fast** (it was, oddly, slower than leaving it on), and the addon keeps out of scenes where it is switched off: their renders are no longer touched or slowed.
+- **Atmosphere Reflection is on by default.** Sky reflections on water and shiny ground are more accurate, at a small cost in speed. The switch is in the Scientific layout under *Ground / Earth → Reflections*.
+- **Controls that did nothing useful are gone:** the ground Bounce slider (the bounce is simply physical now; the Base Color controls it), the Water Mask slot and the Water Depth slider, the Cloud Mask slider, the Milky Way's shader dropdown with the procedural galaxy (the Milky Way is an image now, and much cheaper to render), and the Cycles reference tools, which were only there for our own testing.
+
+`fixed:`{: .label-fixed }
+
+- **Command-line renders now animate.** Rendering from the command line, or through tools that do (render managers), used to produce the sky saved in the file, frozen. The sky now follows the animation there too. *(Reported by a customer — thank you.)*
+- **The Milky Way was far too dim.** In some setups it stayed almost black however high you pushed its Brightness. It is now visible at night straight away.
+- **Shore Softness now works** — it had no effect before. Set it to 0 for a hard, exact coastline.
+- **The night side of the planet, seen from orbit, no longer glows.** The dark ground was wrongly mirroring the daytime sky from under the camera.
+- **No more white line under a rising or setting moon.** Where the moon or the sun touched the sea horizon, the bottom row of the disc could turn pure white, most visibly through a long lens.
+- Changing star settings now updates the sky right away.
+- **macOS:** two shader errors that could appear in the console at startup.
+
+!!! quote "An official statement"
+    There is no hidden feature in this release.
+
+    There is certainly no reason to fold and unfold "Sky & Observer" ten times in a row.
+
+    The Earth is round. Please disperse.
+
+<small>Earth imagery: NASA Earth Observatory (Blue Marble Next Generation, Black Marble). Terrain: NOAA ETOPO 2022. Milky Way: NASA/Goddard Space Flight Center Scientific Visualization Studio; Gaia DR2: ESA/Gaia/DPAC.</small>
+
+
 ### 3.0.7-beta <small>- released 10.09.2026</small>
 
 A new sky rendering engine, vastly improved stability and performance, auto exposure, atmospheric refraction, improved planets, and objects and lamps that take part in the atmosphere and clouds. Requires **Blender 5.2 or newer**. Validated on Windows (Vulkan) and macOS (Metal); Linux/OpenGL has not had a full pass yet.
