@@ -1,13 +1,13 @@
 ### 3.0.8-beta <small>- released 17.09.2026</small>
 
-The addon now leaves your scene alone when you add it, Earth comes in the box (a colour map, city lights, real terrain and a Milky Way ship with the addon), and the Ground section is rebuilt around two materials: Ground and Water. Scenes made with 3.0.7-beta open and look the same. Requires **Blender 5.2 or newer**. The download is larger, about 90 MB, because the maps now come with it.
+The addon now leaves your scene alone when you add it, Earth textures are included (a colour map, city lights, real terrain and a Milky Way ship with the addon), and the Ground section is rebuilt around two materials: Ground and Water. Scenes made with 3.0.7-beta open and look the same. Requires **Blender 5.2 or newer**. The download is larger, about 90 MB, because the maps now come with it.
 
 !!! note "Older scenes that used a water mask"
     The Water Mask slot is gone: water is now worked out from the terrain. If an older scene used a water mask *without* a height map, its seas will be missing. Switch Height to *Image* and the included terrain brings them back.
 
 `new:`{: .label-new }
 
-- **Earth comes in the box.** Switch the ground's Base Color or Height to *Image*, or tick Emission, and the slot fills itself: NASA's Blue Marble (April), NASA's city lights, and real terrain. No download, no setup.
+- **Earth textures included.** Switch the ground's Base Color or Height to *Image*, or tick Emission, and the slot fills itself: NASA's Blue Marble (April), NASA's city lights, and real terrain. No download, no setup.
 - **A download button on every image slot**, next to Blender's usual picker and *Open* button. Choose the month (the snow and the greenery follow the seasons) and the resolution, up to 2 km per pixel. Nothing downloads twice: if the map is already on your disk the button says **Apply** and works offline, and downloaded maps are shared by all your projects.
 - **Real terrain heights.** The height map is now high-precision data from NOAA. Mountains shade smoothly instead of in steps, and coastlines are right: with the old data, low-lying land such as Florida, the Netherlands and the Ganges delta was drawn as sea. NASA's older 8-bit terrain is still behind the download button, now up to 2 km. Finer versions of the new terrain (4 km and 2 km) will appear there when they are online.
 - **The Milky Way is included.** Tick *Milky Way* and NASA's galaxy map (without stars — the addon draws its own) appears. Sharper 4k and 8k versions are behind the download button.
