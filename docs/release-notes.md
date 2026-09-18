@@ -1,3 +1,39 @@
+### 3.0.9-beta <small>- released 18.09.2026</small>
+
+Panoramic cameras work under Cycles, and the night sky is physical at its defaults: the stars were far too bright, brightest of all around the celestial poles, and are now counted right. Scenes made with 3.0.8-beta open as before, with one visible change at night (see the note). Requires **Blender 5.2 or newer**.
+
+!!! note "Your night scenes will look darker"
+    Stars Brightness now ships at 1.0, the physical level, like the Milky Way's Brightness always has, and the over-counting that made every star field 12 to 23 times too bright is fixed. At the same settings the stars are about 3 magnitudes dimmer than in 3.0.8-beta. If you liked the old look, raise **Stars Brightness**: it is a plain multiplier, and the Milky Way has its own. Scenes where you never touched the slider get the new default; scenes where you set a value keep it.
+
+`new:`{: .label-new }
+
+- **Panoramic cameras.** Set a camera to *Panoramic* under Cycles and the whole frame gets the full-quality sky: Fisheye Equidistant, Fisheye Equisolid, Fisheye Lens Polynomial, Equirectangular, Mirror Ball and Central Cylindrical, at every field of view. Until now only a small patch in the middle of the frame got the real sky, with a visible seam around it.
+- **Full quality everywhere.** The sky is computed pixel for pixel through the lens itself, so a 180° fisheye or a 360° equirectangular render is as sharp at the edge as in the centre. Sun, moon, planets, stars, clouds and the ground all land where the lens puts them, in the Rendered viewport (zoom and pan the camera view as you like) and in the render alike.
+- **Composite 3D Objects works through the lens.** Objects far to the side, or behind the camera in a 360° render, get the right haze and are no longer washed out.
+
+`improvements:`{: .label-improvements }
+
+- **The night sky is physical at its defaults.** With Stars Brightness and Milky Way Brightness at 1.0, the stars, the planets and the Milky Way are on the same scale as the sun and the sky. We checked the rendered star field against the star catalog itself: it delivers the real light of each star to within a few percent, and the planets match their textbook magnitudes. The Milky Way is set from its image, so it is right to within about a factor of two.
+- **Points stars and small planets carry their real light.** The *Points* type from 3.0.8 was 4× too bright for stars and 6× for planets. Both now match the *PSF* type.
+- **The black corners of a fisheye stay black** and no longer confuse Auto exposure.
+
+`fixed:`{: .label-fixed }
+
+- **Stars were 12 to 23 times too bright**, and more so the higher the Star Quality: every star in the catalog was being counted several times over. Only the *Draft* quality was ever right. Every star is now counted exactly once, in every quality.
+- **Stars near the celestial poles were brighter still**, up to hundreds of times in *Precise* and *Points*. The sky is now as bright at the poles as anywhere else — Polaris is bright, but not that bright.
+- **The Milky Way seam.** A thin line along one meridian, ending in a radial "pinch", could show through the galaxy. It was an artefact of how the panorama was sampled at its edge.
+
+`research:`{: .label-research }
+
+- EEVEE has no panoramic cameras (it draws a panoramic camera as a normal one), so this is a Cycles feature. With clouds on, a panoramic view updates a little more slowly than a rectangular one.
+- **Star Image 0** (a star as one pixel whatever the zoom) keeps a star's *peak* brightness rather than its total light, by design: right at a normal field of view, brighter as the view gets wider. Use the default Star Image, or *Points*, for a physically exact star field.
+- The Milky Way in a very wide view is slightly softer than before. That is the correct filtering, not a loss of detail.
+- Verified on Windows (Vulkan) and macOS (Metal).
+
+!!! quote "An official statement"
+    The statement issued with 3.0.8-beta still stands.
+
+
 ### 3.0.8-beta <small>- released 17.09.2026</small>
 
 The addon now leaves your scene alone when you add it, Earth textures are included (a colour map, city lights, real terrain and a Milky Way ship with the addon), and the Ground section is rebuilt around two materials: Ground and Water. Scenes made with 3.0.7-beta open and look the same. Requires **Blender 5.2 or newer**. The download is larger, about 90 MB, because the maps now come with it.
