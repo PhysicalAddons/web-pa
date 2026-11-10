@@ -1,3 +1,15 @@
+### 3.0.10-beta <small>- released 11.11.2026</small>
+
+`new:`{: .label-new }
+
+- **Replace with Atmosphere².** Gracefully migrates Physical Starlight and Atmosphere scenes. Keeps the sun direction. Save your file first.
+
+`fixed:`{: .label-fixed }
+
+- A Physical Open Waters ocean survives Add and Remove Atmosphere.
+- Remove Atmosphere keeps your own sun lamp.
+
+
 ### 3.0.9-beta <small>- released 18.09.2026</small>
 
 Panoramic cameras work under Cycles, and the night sky is physical at its defaults: the stars were far too bright, brightest of all around the celestial poles, and are now counted right. Scenes made with 3.0.8-beta open as before, with one visible change at night (see the note). Requires **Blender 5.2 or newer**.
