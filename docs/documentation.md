@@ -5,6 +5,7 @@
 
 This page follows the panel from top to bottom, as of **3.0.8-beta**. The add-on has two interface layouts, picked at the top of the panel: **Simple** shows the everyday controls, **Scientific** shows everything. Each section starts with what you see in Simple; controls marked *Scientific* only appear in that layout.
 
+* [Templates](#templates)
 * [Sky & Observer](#sky-observer)
 * [Camera Settings](#camera-settings)
 * [Atmosphere](#atmosphere)
@@ -19,6 +20,16 @@ This page follows the panel from top to bottom, as of **3.0.8-beta**. The add-on
 
 !!! note "Adding the atmosphere leaves your scene alone"
     Since 3.0.8 the add-on does not change your exposure, your white balance or your viewport when you press `Add Atmosphere`. Its Exposure slider simply picks up the value your scene already had, and `Remove Atmosphere` restores whatever the add-on did change, such as your previous world and colour settings.
+
+
+
+## Templates
+
+The row at the very top of the panel. **Template: ‹name›** names the situation the scene started from — `Default` for a scene made with `Add Atmosphere` — and opens the picker: a list of ready-made situations (a golden hour, a telephoto sunset with mirage, the Milky Way, Earth from orbit, a planetarium dome, a day in twelve seconds) that set the place, the moment, the sky, the weather and a camera aimed at it, in one undo step. The small menu beside it re-applies the template, saves the current scene as a template of your own, or opens your templates folder.
+
+Every section header below carries a **↺** at its right edge: that section back to the template's values, or to the factory values for a scene made with `Add Atmosphere`. ++ctrl++-click goes to the factory values regardless.
+
+The templates, the picker and the file format have their own page: [Templates](/physical-atmosphere/templates/).
 
 
 

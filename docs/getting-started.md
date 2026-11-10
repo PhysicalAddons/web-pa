@@ -39,7 +39,7 @@ Physical Atmosphere² ships as a **Blender extension**:
 ## First Run
 
 - In the 3D Viewport, open the [Sidebar](https://docs.blender.org/manual/en/latest/interface/window_system/regions.html#sidebar) (also called the _N Panel_) and click the **Atmosphere²** tab.
-- Click the `+ Add Atmosphere` button.
+- Click the `+ Add Atmosphere` button — or `Start from a Template…` underneath it, for a ready-made situation: a golden hour, an overcast noon, a 1000 mm sunset with mirage, the Milky Way, Earth from orbit. A template sets the place, the moment, the weather and a camera aimed at the scene; see [Templates](/physical-atmosphere/templates/).
 - The sky appears and the panel fills with settings. The same panel is also available in `Properties > World`.
 
 !!! summary "What happens when the atmosphere is added?"
@@ -56,6 +56,7 @@ The [documentation](/physical-atmosphere/documentation/) covers both, and marks 
 
 ## A quick tour (Simple layout)
 
+- **Template** — the row at the very top names the situation the scene started from (`Default` after `Add Atmosphere`) and opens the list of templates. Every section header below carries a ↺ that puts that section back to the template's values (++ctrl++-click: factory defaults).
 - **Sky & Observer** — choose `Artistic` to drag the sun and moon wherever you like, or `Earth` to use a real location, date and time. In Earth mode you can search for your city or auto-detect your location.
 - **Post Processing** — exposure and white balance. Exposure is a plain slider that starts at your scene's own value; switch the mode to `Auto` and the add-on meters the scene like a camera.
 - **Atmosphere** — how clean or polluted the air is, how much haze it carries, and whether the air bends light near the horizon (`Atmospheric Refraction`).

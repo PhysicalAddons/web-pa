@@ -2,7 +2,7 @@
 
 `new:`{: .label-new }
 
-- **Replace with Atmosphere².** Gracefully migrates Physical Starlight and Atmosphere scenes. Keeps the sun direction. Save your file first.
+- **[Replace with Atmosphere²](articles/migrating-from-psa.md).** Gracefully migrates Physical Starlight and Atmosphere scenes. Keeps the sun direction. Save your file first.
 
 `fixed:`{: .label-fixed }
 
