@@ -32,6 +32,8 @@ nav:
   - Getting Started: getting-started.md
   - Documentation: documentation.md
   - Release notes: release-notes.md
+  - Articles:
+    - Migrating from Physical Starlight and Atmosphere: articles/migrating-from-psa.md
 extra_css:
   - stylesheets/extra.css
 extra:
