@@ -160,3 +160,18 @@ code.label-deferred {
 .pa2-fig .rf-label { font: 400 12.5px Inter, -apple-system, Helvetica, Arial, sans-serif; fill: #000000; }
 .md-typeset .pa2-fig { width: auto; text-align: left; }
 .md-typeset .pa2-fig figcaption { max-width: none; margin: 8px 0 0; text-align: left; }
+.article h1 {
+    font-size: 40px;
+    margin-bottom: 24px;
+}
+.article h1 .headerlink {
+    display: none;
+}
+.article h2 {
+    margin-top: 40px;
+    margin-bottom: 16px;
+}
+.article h3 {
+    margin-top: 24px;
+    margin-bottom: 12px;
+}
