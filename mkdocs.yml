@@ -31,7 +31,6 @@ nav:
   # - Home: index.md
   - Getting Started: getting-started.md
   - Documentation: documentation.md
-  - Templates: templates.md
   - Release notes: release-notes.md
   - Articles:
     - Migrating from Physical Starlight and Atmosphere: articles/migrating-from-psa.md
